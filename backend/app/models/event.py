@@ -20,19 +20,16 @@ class Event(Base):
     Represents a single security or activity event generated inside SENTINEL.
 
     Events are intentionally generic enough to represent authentication,
-    file, database, and network activity in the same pipeline.
+    file, database, and network activity through the same pipeline.
     """
 
     __tablename__ = "events"
 
-    # Internal database primary key.
     id: Mapped[UUID] = mapped_column(
         primary_key=True,
         default=uuid4,
     )
 
-    # Public event identifier used by the API and dashboard.
-    # Example: EVT-2026-000001
     event_id: Mapped[str] = mapped_column(
         String(40),
         unique=True,
@@ -47,7 +44,6 @@ class Event(Base):
         index=True,
     )
 
-    # Link the event to its employee.
     employee_id: Mapped[UUID] = mapped_column(
         ForeignKey("employees.id", ondelete="CASCADE"),
         nullable=False,
@@ -60,8 +56,6 @@ class Event(Base):
         index=True,
     )
 
-    # Examples:
-    # LOGIN_SUCCESS, FILE_ACCESS, NETWORK_CONNECTION
     event_type: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
@@ -112,12 +106,6 @@ class Event(Base):
         default=True,
     )
 
-    # Additional event-specific information can be stored here.
-    # Example:
-    # {
-    #     "protocol": "HTTPS",
-    #     "device": "workstation-17"
-    # }
     event_metadata: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
@@ -128,11 +116,10 @@ class Event(Base):
     # SIMULATOR GROUND TRUTH
     # -----------------------------------------------------
     #
-    # These fields are NEVER given to the ML model as features.
+    # These fields are NEVER provided to anomaly detectors.
     #
-    # They exist only so we can later evaluate whether the model
-    # successfully detected incidents intentionally injected by
-    # the simulator.
+    # They are only used later to evaluate whether SENTINEL
+    # successfully identifies incidents injected by the simulator.
     is_injected_anomaly: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -153,6 +140,12 @@ class Event(Base):
     employee = relationship(
         "Employee",
         back_populates="events",
+    )
+
+    anomaly_scores = relationship(
+        "AnomalyScore",
+        back_populates="event",
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

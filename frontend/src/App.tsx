@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getEmployees, getEvents } from "./services/api";
-import type { Employee, SecurityEvent } from "./types/api";
+import {
+  getAnomalies,
+  getEmployees,
+  getEvents,
+} from "./services/api";
+
+import type {
+  AnomalyResult,
+  Employee,
+  SecurityEvent,
+} from "./types/api";
 
 
 function formatBytes(bytes: number): string {
@@ -26,9 +35,30 @@ function formatTimestamp(timestamp: string): string {
 }
 
 
+function riskClass(riskLevel: string): string {
+  switch (riskLevel) {
+    case "CRITICAL":
+      return "border-red-500/30 bg-red-500/10 text-red-300";
+
+    case "HIGH":
+      return "border-orange-500/30 bg-orange-500/10 text-orange-300";
+
+    case "MEDIUM":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+
+    case "LOW":
+      return "border-blue-500/30 bg-blue-500/10 text-blue-300";
+
+    default:
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+  }
+}
+
+
 function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
+  const [anomalies, setAnomalies] = useState<AnomalyResult[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,13 +70,19 @@ function App() {
         setIsLoading(true);
         setError(null);
 
-        const [employeeData, eventData] = await Promise.all([
+        const [
+          employeeData,
+          eventData,
+          anomalyData,
+        ] = await Promise.all([
           getEmployees(),
           getEvents(),
+          getAnomalies(),
         ]);
 
         setEmployees(employeeData);
         setEvents(eventData);
+        setAnomalies(anomalyData);
       } catch (err) {
         const message =
           err instanceof Error
@@ -63,6 +99,16 @@ function App() {
   }, []);
 
 
+  const anomalyMap = useMemo(() => {
+    return new Map(
+      anomalies.map((anomaly) => [
+        anomaly.event_id,
+        anomaly,
+      ]),
+    );
+  }, [anomalies]);
+
+
   const totalTransferred = useMemo(() => {
     return events.reduce(
       (total, event) =>
@@ -72,16 +118,24 @@ function App() {
   }, [events]);
 
 
-  const successfulEvents = useMemo(() => {
-    return events.filter((event) => event.success).length;
-  }, [events]);
+  const highestRisk = useMemo(() => {
+    if (anomalies.length === 0) {
+      return null;
+    }
+
+    return anomalies.reduce(
+      (highest, current) =>
+        current.anomaly_score > highest.anomaly_score
+          ? current
+          : highest,
+    );
+  }, [anomalies]);
 
 
   return (
     <main className="min-h-screen bg-[#05070b] text-slate-100">
       <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
 
-        {/* Header */}
         <header className="mb-10 flex flex-col gap-6 border-b border-slate-800/80 pb-8 lg:flex-row lg:items-center lg:justify-between">
 
           <div>
@@ -98,7 +152,7 @@ function App() {
             </h1>
 
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400 sm:text-base">
-              AI-powered anomaly detection and incident intelligence
+              Behavioral anomaly detection and incident intelligence
               for a simulated enterprise environment.
             </p>
           </div>
@@ -112,11 +166,11 @@ function App() {
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
-                System Online
+                Detection Online
               </p>
 
               <p className="text-xs text-slate-500">
-                API + Database connected
+                API + Database + Scoring
               </p>
             </div>
           </div>
@@ -124,17 +178,15 @@ function App() {
         </header>
 
 
-        {/* Loading */}
         {isLoading && (
           <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-10 text-center">
             <p className="text-sm uppercase tracking-[0.25em] text-cyan-400">
-              Loading intelligence...
+              Loading security intelligence...
             </p>
           </section>
         )}
 
 
-        {/* Error */}
         {error && (
           <section className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
             <p className="font-semibold text-red-300">
@@ -150,7 +202,6 @@ function App() {
 
         {!isLoading && !error && (
           <>
-            {/* Summary cards */}
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
               <article className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
@@ -163,7 +214,7 @@ function App() {
                 </p>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Simulated workforce online
+                  Simulated identities monitored
                 </p>
               </article>
 
@@ -178,269 +229,310 @@ function App() {
                 </p>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Security activity recorded
+                  Security activity captured
                 </p>
               </article>
 
 
               <article className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Successful Events
-                </p>
-
-                <p className="mt-3 text-3xl font-semibold text-emerald-300">
-                  {successfulEvents}
-                </p>
-
-                <p className="mt-2 text-xs text-slate-500">
-                  Successful operations
-                </p>
-              </article>
-
-
-              <article className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Data Observed
+                  Events Scored
                 </p>
 
                 <p className="mt-3 text-3xl font-semibold">
-                  {formatBytes(totalTransferred)}
+                  {anomalies.length}
                 </p>
 
                 <p className="mt-2 text-xs text-slate-500">
-                  Combined event traffic
+                  Behavioral analyses completed
+                </p>
+              </article>
+
+
+              <article className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Highest Risk
+                </p>
+
+                <p className="mt-3 text-3xl font-semibold">
+                  {highestRisk
+                    ? highestRisk.anomaly_score.toFixed(2)
+                    : "—"}
+                </p>
+
+                <p className="mt-2 text-xs text-slate-500">
+                  {highestRisk
+                    ? highestRisk.risk_level
+                    : "No analyzed events"}
                 </p>
               </article>
 
             </section>
 
 
-            {/* Main content */}
-            <section className="mt-8 grid gap-6 xl:grid-cols-[1.6fr_0.8fr]">
+            <section className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/30">
 
-              {/* Event stream */}
-              <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/30">
+              <div className="flex items-center justify-between border-b border-slate-800 px-6 py-5">
 
-                <div className="flex items-center justify-between border-b border-slate-800 px-6 py-5">
-                  <div>
-                    <h2 className="font-semibold">
-                      Security Event Stream
-                    </h2>
+                <div>
+                  <h2 className="font-semibold">
+                    Security Event Intelligence
+                  </h2>
 
-                    <p className="mt-1 text-sm text-slate-500">
-                      Latest corporate activity captured by SENTINEL
-                    </p>
-                  </div>
-
-                  <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
-                    LIVE DATA
-                  </span>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Live activity enriched with behavioral anomaly scoring
+                  </p>
                 </div>
 
+                <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs font-medium text-cyan-300">
+                  DETECTION PIPELINE
+                </span>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-
-                    <thead className="border-b border-slate-800 bg-slate-950/40 text-xs uppercase tracking-wider text-slate-500">
-                      <tr>
-                        <th className="px-6 py-4">Event</th>
-                        <th className="px-6 py-4">Type</th>
-                        <th className="px-6 py-4">Source</th>
-                        <th className="px-6 py-4">Resource</th>
-                        <th className="px-6 py-4">Time</th>
-                        <th className="px-6 py-4">Status</th>
-                      </tr>
-                    </thead>
+              </div>
 
 
-                    <tbody>
-                      {events.map((event) => (
+              <div className="overflow-x-auto">
+
+                <table className="w-full min-w-[950px] text-left text-sm">
+
+                  <thead className="border-b border-slate-800 bg-slate-950/40 text-xs uppercase tracking-wider text-slate-500">
+                    <tr>
+                      <th className="px-6 py-4">Event</th>
+                      <th className="px-6 py-4">Type</th>
+                      <th className="px-6 py-4">Source</th>
+                      <th className="px-6 py-4">Traffic</th>
+                      <th className="px-6 py-4">Score</th>
+                      <th className="px-6 py-4">Risk</th>
+                      <th className="px-6 py-4">Time</th>
+                    </tr>
+                  </thead>
+
+
+                  <tbody>
+
+                    {events.map((event) => {
+                      const anomaly = anomalyMap.get(
+                        event.event_id,
+                      );
+
+                      return (
                         <tr
                           key={event.id}
                           className="border-b border-slate-800/70 transition hover:bg-slate-800/30"
                         >
+
                           <td className="px-6 py-5 font-mono text-xs text-cyan-300">
                             {event.event_id}
                           </td>
 
-                          <td className="px-6 py-5">
-                            <span className="font-medium text-slate-200">
-                              {event.event_type}
-                            </span>
+
+                          <td className="px-6 py-5 font-medium text-slate-200">
+                            {event.event_type}
                           </td>
+
 
                           <td className="px-6 py-5 font-mono text-xs text-slate-400">
                             {event.source_ip}
                           </td>
 
+
                           <td className="px-6 py-5 text-slate-400">
-                            {event.resource_name ?? "—"}
+                            {formatBytes(
+                              event.bytes_sent
+                              + event.bytes_received,
+                            )}
                           </td>
+
+
+                          <td className="px-6 py-5">
+                            {anomaly ? (
+                              <span className="font-mono text-base font-semibold">
+                                {anomaly.anomaly_score.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">
+                                —
+                              </span>
+                            )}
+                          </td>
+
+
+                          <td className="px-6 py-5">
+
+                            {anomaly ? (
+                              <span
+                                className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${riskClass(
+                                  anomaly.risk_level,
+                                )}`}
+                              >
+                                {anomaly.risk_level}
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-slate-700 bg-slate-800/40 px-2.5 py-1 text-xs text-slate-500">
+                                UNSCORED
+                              </span>
+                            )}
+
+                          </td>
+
 
                           <td className="px-6 py-5 text-xs text-slate-500">
                             {formatTimestamp(event.timestamp)}
                           </td>
 
-                          <td className="px-6 py-5">
-                            <span
-                              className={
-                                event.success
-                                  ? "rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300"
-                                  : "rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-xs text-red-300"
-                              }
-                            >
-                              {event.success ? "SUCCESS" : "FAILED"}
-                            </span>
-                          </td>
                         </tr>
-                      ))}
-                    </tbody>
+                      );
+                    })}
 
-                  </table>
-                </div>
+                  </tbody>
+
+                </table>
 
               </div>
 
-
-              {/* Employee intelligence */}
-              <aside className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6">
-
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-400">
-                  Entity Intelligence
-                </p>
-
-                <h2 className="mt-2 text-xl font-semibold">
-                  Employee Baseline
-                </h2>
+            </section>
 
 
-                {employees.length > 0 ? (
-                  <div className="mt-6">
-                    <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-5">
+            {highestRisk && (
+              <section className="mt-8 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
 
-                      <div className="flex items-start justify-between gap-4">
+                <article className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6">
 
-                        <div>
-                          <p className="text-lg font-semibold">
-                            {employees[0].name}
-                          </p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-400">
+                    Detection Detail
+                  </p>
 
-                          <p className="mt-1 font-mono text-xs text-cyan-400">
-                            {employees[0].user_id}
-                          </p>
-                        </div>
-
-                        <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
-                          ACTIVE
-                        </span>
-
-                      </div>
+                  <h2 className="mt-2 text-xl font-semibold">
+                    Highest-Risk Event
+                  </h2>
 
 
-                      <div className="mt-6 space-y-4 text-sm">
+                  <div className="mt-6 space-y-4">
 
-                        <div className="flex justify-between gap-4 border-b border-slate-800 pb-3">
-                          <span className="text-slate-500">
-                            Department
-                          </span>
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-slate-500">
+                        Event
+                      </p>
 
-                          <span>
-                            {employees[0].department}
-                          </span>
-                        </div>
-
-
-                        <div className="flex justify-between gap-4 border-b border-slate-800 pb-3">
-                          <span className="text-slate-500">
-                            Role
-                          </span>
-
-                          <span className="text-right">
-                            {employees[0].job_role}
-                          </span>
-                        </div>
-
-
-                        <div className="flex justify-between gap-4 border-b border-slate-800 pb-3">
-                          <span className="text-slate-500">
-                            Typical IP
-                          </span>
-
-                          <span className="font-mono text-xs">
-                            {employees[0].typical_ip}
-                          </span>
-                        </div>
-
-
-                        <div className="flex justify-between gap-4 border-b border-slate-800 pb-3">
-                          <span className="text-slate-500">
-                            Work Window
-                          </span>
-
-                          <span>
-                            {String(employees[0].normal_start_hour).padStart(2, "0")}
-                            :00
-                            {" — "}
-                            {String(employees[0].normal_end_hour).padStart(2, "0")}
-                            :00
-                          </span>
-                        </div>
-
-
-                        <div className="flex justify-between gap-4">
-                          <span className="text-slate-500">
-                            Typical Location
-                          </span>
-
-                          <span className="text-right">
-                            {employees[0].typical_location}
-                          </span>
-                        </div>
-
-                      </div>
-
+                      <p className="mt-1 font-mono text-cyan-300">
+                        {highestRisk.event_id}
+                      </p>
                     </div>
 
 
-                    <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/30 p-4">
+                    <div>
                       <p className="text-xs uppercase tracking-wider text-slate-500">
-                        Baseline Activity
+                        Employee
                       </p>
 
-                      <div className="mt-4 grid grid-cols-2 gap-4">
-
-                        <div>
-                          <p className="text-xl font-semibold">
-                            {employees[0].typical_login_frequency}
-                          </p>
-
-                          <p className="text-xs text-slate-500">
-                            logins / day
-                          </p>
-                        </div>
+                      <p className="mt-1">
+                        {highestRisk.employee_user_id}
+                      </p>
+                    </div>
 
 
-                        <div>
-                          <p className="text-xl font-semibold">
-                            {employees[0].typical_files_accessed}
-                          </p>
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-slate-500">
+                        Detector
+                      </p>
 
-                          <p className="text-xs text-slate-500">
-                            files / day
-                          </p>
-                        </div>
+                      <p className="mt-1">
+                        {highestRisk.detector_name}
+                        {" "}
+                        v{highestRisk.detector_version}
+                      </p>
+                    </div>
 
+
+                    <div className="flex items-end justify-between gap-4 border-t border-slate-800 pt-5">
+
+                      <div>
+                        <p className="text-xs uppercase tracking-wider text-slate-500">
+                          Anomaly Score
+                        </p>
+
+                        <p className="mt-1 text-4xl font-semibold">
+                          {highestRisk.anomaly_score.toFixed(2)}
+                        </p>
                       </div>
+
+
+                      <span
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${riskClass(
+                          highestRisk.risk_level,
+                        )}`}
+                      >
+                        {highestRisk.risk_level}
+                      </span>
+
                     </div>
 
                   </div>
-                ) : (
-                  <p className="mt-6 text-sm text-slate-500">
-                    No employees have been generated yet.
-                  </p>
-                )}
 
-              </aside>
+                </article>
+
+
+                <article className="rounded-2xl border border-slate-800 bg-slate-900/30 p-6">
+
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-400">
+                    Explainability
+                  </p>
+
+                  <h2 className="mt-2 text-xl font-semibold">
+                    Detection Reasoning
+                  </h2>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    Why SENTINEL assigned this risk score.
+                  </p>
+
+
+                  <div className="mt-6 space-y-3">
+
+                    {highestRisk.explanation.reasons?.map(
+                      (reason, index) => (
+                        <div
+                          key={`${reason}-${index}`}
+                          className="flex gap-3 rounded-xl border border-slate-800 bg-slate-950/40 p-4"
+                        >
+
+                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-cyan-400" />
+
+                          <p className="text-sm leading-6 text-slate-300">
+                            {reason}
+                          </p>
+
+                        </div>
+                      ),
+                    )}
+
+                  </div>
+
+                </article>
+
+              </section>
+            )}
+
+
+            <section className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/20 p-5">
+
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+
+                <div>
+                  <p className="text-sm font-medium">
+                    Data observed
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Total traffic represented by currently loaded events
+                  </p>
+                </div>
+
+                <p className="text-2xl font-semibold">
+                  {formatBytes(totalTransferred)}
+                </p>
+
+              </div>
 
             </section>
           </>

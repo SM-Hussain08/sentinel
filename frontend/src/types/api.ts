@@ -50,3 +50,29 @@ export interface SecurityEvent {
 
   created_at: string;
 }
+
+
+export interface AnomalyResult {
+  id: string;
+
+  event_id: string;
+  employee_user_id: string;
+
+  detector_name: string;
+  detector_version: string;
+  detector_type: string;
+
+  raw_score: number;
+  anomaly_score: number;
+  risk_level: "NORMAL" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+  feature_snapshot: Record<string, unknown>;
+
+  explanation: {
+    summary?: string;
+    reasons?: string[];
+    [key: string]: unknown;
+  };
+
+  created_at: string;
+}

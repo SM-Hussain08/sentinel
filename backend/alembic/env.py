@@ -7,7 +7,13 @@ from app.config import settings
 from app.database.session import Base
 
 # Import models so SQLAlchemy knows which tables belong to Base.metadata.
-from app.models import AnomalyScore, Employee, Event  # noqa: F401
+from app.models import (
+    AnomalyScore,
+    Employee,
+    Event,
+    Incident,
+    IncidentEvent,
+)  # noqa: F401
 
 
 # Alembic configuration object.

@@ -1,11 +1,17 @@
 import type {
   AnomalyResult,
   Employee,
+  MLAnomaly,
+  MLEventAnalysis,
+  MLModelInfo,
+  MLSummary,
   SecurityEvent,
 } from "../types/api";
 
 
-const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ??
+  "http://127.0.0.1:8000/api/v1";
 
 
 async function request<T>(
@@ -55,5 +61,39 @@ export function analyzeEvent(
     {
       method: "POST",
     },
+  );
+}
+
+
+export function getMLModelInfo() {
+  return request<MLModelInfo>(
+    "/ml/model",
+  );
+}
+
+
+export function getMLSummary() {
+  return request<MLSummary>(
+    "/ml/summary",
+  );
+}
+
+
+export function getMLAnomalies(
+  limit = 50,
+) {
+  return request<MLAnomaly[]>(
+    `/ml/anomalies?limit=${limit}`,
+  );
+}
+
+
+export function getMLEventAnalysis(
+  eventId: string,
+) {
+  return request<MLEventAnalysis>(
+    `/ml/events/${encodeURIComponent(
+      eventId,
+    )}`,
   );
 }

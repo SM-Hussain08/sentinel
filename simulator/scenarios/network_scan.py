@@ -51,7 +51,7 @@ class NetworkScanScenario:
                         )
                     ),
 
-                    event_type="NETWORK_SCAN",
+                    event_type="NETWORK_CONNECTION",
 
                     source_ip=source_ip,
                     destination_ip=destination_ip,

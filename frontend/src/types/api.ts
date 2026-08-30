@@ -76,3 +76,119 @@ export interface AnomalyResult {
 
   created_at: string;
 }
+
+export type MLRiskLevel =
+  | "NORMAL"
+  | "LOW"
+  | "MEDIUM"
+  | "HIGH"
+  | "CRITICAL";
+
+
+export interface MLModelInfo {
+  model_name: string;
+  model_version: string;
+  algorithm: string;
+
+  feature_count: number;
+
+  training_rows: number;
+  evaluation_rows: number;
+
+  threshold_percentile: number;
+
+  precision: number;
+  recall: number;
+  f1_score: number;
+  false_positive_rate: number;
+}
+
+
+export interface MLRiskDistribution {
+  normal: number;
+  low: number;
+  medium: number;
+  high: number;
+  critical: number;
+}
+
+
+export interface MLSummary {
+  detector_name: string;
+  detector_version: string;
+
+  events_scored: number;
+  alert_count: number;
+
+  average_score: number;
+  highest_score: number;
+
+  risk_distribution: MLRiskDistribution;
+}
+
+
+export interface MLExplanation {
+  summary?: string;
+
+  model_name?: string;
+  model_version?: string;
+
+  alert_threshold?: number;
+
+  score_interpretation?: string;
+
+  alert_threshold_reached?: boolean;
+
+  [key: string]: unknown;
+}
+
+
+export interface MLAnomaly {
+  score_id: string;
+
+  event_id: string;
+  employee_user_id: string;
+
+  timestamp: string;
+  event_type: string;
+
+  anomaly_score: number;
+  raw_score: number;
+
+  risk_level: MLRiskLevel;
+
+  alert_threshold_reached: boolean;
+
+  feature_snapshot: Record<
+    string,
+    unknown
+  >;
+
+  explanation: MLExplanation;
+}
+
+
+export interface MLEventAnalysis {
+  event_id: string;
+  employee_user_id: string;
+
+  timestamp: string;
+  event_type: string;
+
+  detector_name: string;
+  detector_version: string;
+
+  raw_score: number;
+  anomaly_score: number;
+
+  risk_level: MLRiskLevel;
+
+  alert_threshold_reached: boolean;
+
+  feature_snapshot: Record<
+    string,
+    unknown
+  >;
+
+  explanation: MLExplanation;
+}

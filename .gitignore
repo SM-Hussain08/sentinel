@@ -44,6 +44,7 @@ dist/
 # Generated datasets
 ml_engine/data/generated/
 ml_engine/data/processed/
+ml_engine/models/artifacts/
 
 # -------------------------
 # Node / React

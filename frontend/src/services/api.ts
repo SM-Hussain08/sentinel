@@ -1,11 +1,18 @@
 import type {
   AnomalyResult,
   Employee,
+  IncidentDetail,
+  IncidentInvestigation,
+  IncidentListItem,
+  IncidentSummary,
+  IncidentTimelineEvent,
   MLAnomaly,
   MLEventAnalysis,
   MLModelInfo,
   MLSummary,
   SecurityEvent,
+  EvaluationSummary,
+  MLAnomalyFeedPage,
 } from "../types/api";
 
 
@@ -95,5 +102,143 @@ export function getMLEventAnalysis(
     `/ml/events/${encodeURIComponent(
       eventId,
     )}`,
+  );
+}
+
+export function getIncidentSummary() {
+  return request<IncidentSummary>(
+    "/incidents/summary",
+  );
+}
+
+
+export function getIncidents(
+  limit = 50,
+) {
+  return request<
+    IncidentListItem[]
+  >(
+    `/incidents?limit=${limit}`,
+  );
+}
+
+
+export function getIncidentsBySeverity(
+  severity:
+    | "CRITICAL"
+    | "HIGH"
+    | "MEDIUM",
+  limit = 50,
+) {
+  return request<
+    IncidentListItem[]
+  >(
+    `/incidents?severity=${severity}&limit=${limit}`,
+  );
+}
+
+
+export function getIncidentDetail(
+  incidentId: string,
+) {
+  return request<IncidentDetail>(
+    `/incidents/${encodeURIComponent(
+      incidentId,
+    )}`,
+  );
+}
+
+
+export function getIncidentTimeline(
+  incidentId: string,
+) {
+  return request<
+    IncidentTimelineEvent[]
+  >(
+    `/incidents/${encodeURIComponent(
+      incidentId,
+    )}/timeline`,
+  );
+}
+
+
+export function getIncidentInvestigation(
+  incidentId: string,
+) {
+  return request<
+    IncidentInvestigation
+  >(
+    `/incidents/${encodeURIComponent(
+      incidentId,
+    )}/investigation`,
+  );
+}
+
+export function getEvaluationSummary() {
+  return request<EvaluationSummary>(
+    "/evaluation/summary",
+  );
+}
+
+
+export interface MLAnomalyPageOptions {
+  riskLevel?:
+    | "CRITICAL"
+    | "HIGH"
+    | "MEDIUM"
+    | "LOW";
+
+  search?: string;
+
+  limit?: number;
+  offset?: number;
+}
+
+
+export function getMLAnomalyPage(
+  options:
+    MLAnomalyPageOptions = {},
+) {
+  const params =
+    new URLSearchParams();
+
+  if (
+    options.riskLevel
+  ) {
+    params.set(
+      "risk_level",
+      options.riskLevel,
+    );
+  }
+
+  if (
+    options.search
+  ) {
+    params.set(
+      "search",
+      options.search,
+    );
+  }
+
+  params.set(
+    "limit",
+    String(
+      options.limit
+      ?? 50,
+    ),
+  );
+
+  params.set(
+    "offset",
+    String(
+      options.offset
+      ?? 0,
+    ),
+  );
+
+  return request<
+    MLAnomalyFeedPage
+  >(
+    `/ml/anomalies/paged?${params.toString()}`,
   );
 }

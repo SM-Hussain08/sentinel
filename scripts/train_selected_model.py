@@ -50,6 +50,13 @@ for path in (
         )
 
 
+from app.selected_detector import (  # noqa: E402
+    SELECTED_DETECTOR_NAME,
+    SELECTED_DETECTOR_VERSION,
+    SELECTED_MODEL_MANIFEST_PATH,
+    SELECTED_MODEL_PATH,
+)
+
 from ml_engine.features import (  # noqa: E402
     V1_FEATURE_COLUMNS,
 )
@@ -63,6 +70,12 @@ from ml_engine.preprocessing import (  # noqa: E402
     parse_event_timestamps,
 )
 
+from ml_engine.evaluation.registry import (  # noqa: E402
+    SELECTED_MODEL_RESULT_PATH,
+    try_build_evaluation_registry,
+    write_evaluation_component,
+)
+
 
 DATASET_PATH = (
     PROJECT_ROOT
@@ -72,22 +85,13 @@ DATASET_PATH = (
     / "sentinel_event_features.csv"
 )
 
-
 MODEL_PATH = (
-    PROJECT_ROOT
-    / "ml_engine"
-    / "models"
-    / "artifacts"
-    / "sentinel_iforest_v1_1.joblib"
+    SELECTED_MODEL_PATH
 )
 
 
 MANIFEST_PATH = (
-    PROJECT_ROOT
-    / "ml_engine"
-    / "models"
-    / "artifacts"
-    / "sentinel_iforest_v1_1_manifest.json"
+    SELECTED_MODEL_MANIFEST_PATH
 )
 
 
@@ -161,7 +165,9 @@ def train_selected_model() -> None:
     ].copy()
 
     detector = SentinelIsolationForest(
-        model_version="1.1",
+        model_version=(
+            SELECTED_DETECTOR_VERSION
+        ),
         feature_columns=(
             V1_FEATURE_COLUMNS
         ),
@@ -172,6 +178,15 @@ def train_selected_model() -> None:
         threshold_percentile=0.99,
         random_state=42,
     )
+
+    if (
+        detector.model_name
+        != SELECTED_DETECTOR_NAME
+    ):
+        raise RuntimeError(
+            "Selected detector implementation produced "
+            "an unexpected model name."
+        )
 
     detector.fit(
         training_dataframe
@@ -360,6 +375,88 @@ def train_selected_model() -> None:
         encoding="utf-8",
     )
 
+    selected_model_evaluation = {
+        "selected_model": {
+            "name":
+                "Isolation Forest",
+
+            "detector_name":
+                detector.model_name,
+
+            "version":
+                detector.model_version,
+
+            "feature_count":
+                len(
+                    detector.feature_columns
+                ),
+
+            "training_rows":
+                len(
+                    training_dataframe
+                ),
+
+            "evaluation_rows":
+                len(
+                    evaluation_dataframe
+                ),
+
+            "precision":
+                float(
+                    precision
+                ),
+
+            "recall":
+                float(
+                    recall
+                ),
+
+            "f1_score":
+                float(
+                    f1
+                ),
+
+            "false_positive_rate":
+                float(
+                    false_positive_rate
+                ),
+
+            "false_positives":
+                int(
+                    fp
+                ),
+
+            "threshold_percentile":
+                float(
+                    detector
+                    .threshold_percentile
+                ),
+        },
+
+        "provenance": {
+            "training_period":
+                manifest[
+                    "training_period"
+                ],
+
+            "evaluation_period":
+                manifest[
+                    "evaluation_period"
+                ],
+        },
+    }
+
+
+    write_evaluation_component(
+        SELECTED_MODEL_RESULT_PATH,
+        selected_model_evaluation,
+    )
+
+
+    registry_updated, missing_registry_parts = (
+        try_build_evaluation_registry()
+    )
+
     print()
     print(
         "SENTINEL SELECTED MODEL"
@@ -369,12 +466,12 @@ def train_selected_model() -> None:
 
     print(
         "Model                  : "
-        "Isolation Forest"
+        f"{detector.model_name}"
     )
 
     print(
         "Version                : "
-        "1.1"
+        f"{detector.model_version}"
     )
 
     print(
@@ -447,6 +544,25 @@ def train_selected_model() -> None:
         f"Model manifest         : "
         f"{MANIFEST_PATH}"
     )
+
+    print(
+        f"Evaluation result      : "
+        f"{SELECTED_MODEL_RESULT_PATH}"
+    )
+
+
+    if registry_updated:
+        print(
+            "Evaluation registry    : rebuilt"
+        )
+
+    else:
+        print(
+            "Evaluation registry    : waiting for "
+            + ", ".join(
+                missing_registry_parts
+            )
+        )
 
     print("=" * 68)
 

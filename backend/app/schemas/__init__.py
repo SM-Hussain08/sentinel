@@ -16,6 +16,17 @@ from app.schemas.ml import (
     MLRiskDistribution,
     MLSummary,
 )
+from app.schemas.evaluation import (
+    EvaluationProvenance,
+    EvaluationSummary,
+    IncidentEvaluation,
+    ModelExperimentEvaluation,
+    SelectedModelEvaluation,
+)
+from app.schemas.anomaly_feed import (
+    MLAnomalyFeedItem,
+    MLAnomalyFeedPage,
+)
 
 __all__ = [
     "EmployeeCreate",
@@ -34,4 +45,11 @@ __all__ = [
     "IncidentSeverityDistribution",
     "IncidentSummary",
     "IncidentTimelineEvent",
+    "EvaluationProvenance",
+    "EvaluationSummary",
+    "IncidentEvaluation",
+    "ModelExperimentEvaluation",
+    "SelectedModelEvaluation",
+    "MLAnomalyFeedItem",
+    "MLAnomalyFeedPage",
 ]

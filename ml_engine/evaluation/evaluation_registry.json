@@ -1,0 +1,69 @@
+{
+  "registry_version": "1.1",
+  "generated_at": "2026-08-31T14:31:44.225460+00:00",
+  "selected_model": {
+    "name": "Isolation Forest",
+    "detector_name": "isolation-forest",
+    "version": "1.1",
+    "feature_count": 17,
+    "training_rows": 1938,
+    "evaluation_rows": 4030,
+    "precision": 0.6854838709677419,
+    "recall": 0.9550561797752809,
+    "f1_score": 0.7981220657276995,
+    "false_positive_rate": 0.009895965490992134,
+    "false_positives": 39,
+    "threshold_percentile": 0.99
+  },
+  "experiments": [
+    {
+      "name": "V1",
+      "version": "1.0-experiment",
+      "feature_count": 17,
+      "precision": 0.6854838709677419,
+      "recall": 0.9550561797752809,
+      "f1_score": 0.7981220657276995,
+      "false_positive_rate": 0.009895965490992134,
+      "false_positives": 39,
+      "alerts": 124,
+      "selected": true,
+      "decision": "Selected because it achieved the strongest evaluation F1 and precision while preserving a compact feature set."
+    },
+    {
+      "name": "V2",
+      "version": "2.0-experiment",
+      "feature_count": 27,
+      "precision": 0.6692913385826772,
+      "recall": 0.9550561797752809,
+      "f1_score": 0.7870370370370371,
+      "false_positive_rate": 0.010657193605683837,
+      "false_positives": 42,
+      "alerts": 127,
+      "selected": false,
+      "decision": "Rejected because additional features did not outperform V1 on the selected evaluation criteria."
+    }
+  ],
+  "incident_evaluation": {
+    "true_positive_incidents": 5,
+    "false_positive_incidents": 2,
+    "attack_instances_detected": 5,
+    "attack_instances_total": 5,
+    "precision": 0.7142857142857143,
+    "recall": 1.0,
+    "f1_score": 0.8333333333333333,
+    "timeline_events_recovered": 89,
+    "timeline_events_total": 89,
+    "timeline_recovery_rate": 1.0
+  },
+  "provenance": {
+    "ml_training_period": "2026-08-24",
+    "ml_evaluation_period": "2026-08-25 through 2026-08-26",
+    "incident_ground_truth_batch": "phase3_attack_batch_01",
+    "ground_truth_policy": "Simulator ground-truth labels are used only for offline evaluation and never for operational inference."
+  },
+  "component_generated_at": {
+    "selected_model": "2026-08-31T14:25:02.928746+00:00",
+    "model_comparison": "2026-08-31T14:30:23.465354+00:00",
+    "incident_evaluation": "2026-08-31T14:31:12.187057+00:00"
+  }
+}

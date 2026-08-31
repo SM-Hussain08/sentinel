@@ -61,19 +61,14 @@ from ml_engine.models import (  # noqa: E402
     SentinelIsolationForest,
 )
 
-
-MODEL_PATH = (
-    PROJECT_ROOT
-    / "ml_engine"
-    / "models"
-    / "artifacts"
-    / "sentinel_iforest_v1_1.joblib"
+from app.selected_detector import (  # noqa: E402
+    SELECTED_DETECTOR,
+    SELECTED_MODEL_PATH,
 )
 
-
-DETECTOR_NAME = "isolation-forest"
-DETECTOR_VERSION = "1.1"
-DETECTOR_TYPE = "unsupervised-ml"
+MODEL_PATH = (
+    SELECTED_MODEL_PATH
+)
 
 
 def python_value(
@@ -196,10 +191,10 @@ def score_events() -> None:
                 )
                 .where(
                     AnomalyScore.detector_name
-                    == DETECTOR_NAME,
+                    == SELECTED_DETECTOR.name,
 
                     AnomalyScore.detector_version
-                    == DETECTOR_VERSION,
+                    == SELECTED_DETECTOR.version,
                 )
             ).scalars()
         )
@@ -294,15 +289,15 @@ def score_events() -> None:
                 event_uuid=event_uuid,
 
                 detector_name=(
-                    DETECTOR_NAME
+                    SELECTED_DETECTOR.name
                 ),
 
                 detector_version=(
-                    DETECTOR_VERSION
+                    SELECTED_DETECTOR.version
                 ),
 
                 detector_type=(
-                    DETECTOR_TYPE
+                    SELECTED_DETECTOR.detector_type
                 ),
 
                 raw_score=raw_score,
@@ -379,10 +374,10 @@ def score_events() -> None:
                 )
                 .where(
                     AnomalyScore.detector_name
-                    == DETECTOR_NAME,
+                    == SELECTED_DETECTOR.name,
 
                     AnomalyScore.detector_version
-                    == DETECTOR_VERSION,
+                    == SELECTED_DETECTOR.version,
                 )
             ).all()
         )

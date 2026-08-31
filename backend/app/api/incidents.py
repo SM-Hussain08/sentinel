@@ -32,6 +32,10 @@ from app.schemas.incident import (
     IncidentTimelineEvent,
 )
 
+from app.selected_detector import (
+    SELECTED_DETECTOR,
+)
+
 
 router = APIRouter(
     prefix="/incidents",
@@ -39,10 +43,6 @@ router = APIRouter(
         "Incident Intelligence",
     ],
 )
-
-
-DETECTOR_NAME = "isolation-forest"
-DETECTOR_VERSION = "1.1"
 
 
 @router.get(
@@ -451,10 +451,10 @@ def get_incident_timeline(
             == incident.id,
 
             AnomalyScore.detector_name
-            == DETECTOR_NAME,
+            == SELECTED_DETECTOR.name,
 
             AnomalyScore.detector_version
-            == DETECTOR_VERSION,
+            == SELECTED_DETECTOR.version,
         )
         .order_by(
             IncidentEvent.sequence_number

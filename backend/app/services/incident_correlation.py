@@ -13,9 +13,9 @@ from app.models import (
     Event,
 )
 
-
-DETECTOR_NAME = "isolation-forest"
-DETECTOR_VERSION = "1.1"
+from app.selected_detector import (
+    SELECTED_DETECTOR,
+)
 
 SEED_RISK_LEVEL = "CRITICAL"
 
@@ -111,10 +111,10 @@ class IncidentCorrelationEngine:
             )
             .where(
                 AnomalyScore.detector_name
-                == DETECTOR_NAME,
+                == SELECTED_DETECTOR.name,
 
                 AnomalyScore.detector_version
-                == DETECTOR_VERSION,
+                == SELECTED_DETECTOR.version,
             )
             .order_by(
                 Employee.user_id,
@@ -1130,10 +1130,10 @@ class IncidentCorrelationEngine:
                 "1.0",
 
             "detector_name":
-                DETECTOR_NAME,
+                SELECTED_DETECTOR.name,
 
             "detector_version":
-                DETECTOR_VERSION,
+                SELECTED_DETECTOR.version,
 
             "signals":
                 signals,

@@ -53,6 +53,12 @@ from ml_engine.evaluation import (  # noqa: E402
     calculate_incident_metrics,
 )
 
+from ml_engine.evaluation.registry import (  # noqa: E402
+    INCIDENT_EVALUATION_RESULT_PATH,
+    try_build_evaluation_registry,
+    write_evaluation_component,
+)
+
 
 EVALUATION_BATCH = (
     "phase3_attack_batch_01"
@@ -511,6 +517,84 @@ def evaluate_incidents() -> None:
             else 0.0
         )
 
+        incident_evaluation_result = {
+            "incident_evaluation": {
+                "true_positive_incidents":
+                    int(
+                        metrics
+                        .true_positive_incidents
+                    ),
+
+                "false_positive_incidents":
+                    int(
+                        metrics
+                        .false_positive_incidents
+                    ),
+
+                "attack_instances_detected":
+                    int(
+                        metrics
+                        .detected_attack_instances
+                    ),
+
+                "attack_instances_total":
+                    int(
+                        metrics
+                        .total_attack_instances
+                    ),
+
+                "precision":
+                    float(
+                        metrics.precision
+                    ),
+
+                "recall":
+                    float(
+                        metrics.recall
+                    ),
+
+                "f1_score":
+                    float(
+                        metrics.f1_score
+                    ),
+
+                "timeline_events_recovered":
+                    len(
+                        covered_attack_event_ids
+                    ),
+
+                "timeline_events_total":
+                    total_attack_events,
+
+                "timeline_recovery_rate":
+                    float(
+                        event_recovery_rate
+                    ),
+            },
+
+            "provenance": {
+                "ground_truth_batch":
+                    EVALUATION_BATCH,
+
+                "ground_truth_policy": (
+                    "Simulator ground-truth labels are used only "
+                    "for offline evaluation and never for "
+                    "operational inference."
+                ),
+            },
+        }
+
+
+        write_evaluation_component(
+            INCIDENT_EVALUATION_RESULT_PATH,
+            incident_evaluation_result,
+        )
+
+
+        registry_updated, missing_registry_parts = (
+            try_build_evaluation_registry()
+        )
+
         print()
         print(
             "Correlation Recovery"
@@ -530,6 +614,27 @@ def evaluate_incidents() -> None:
             f"Attack timeline recovery     : "
             f"{event_recovery_rate:.3%}"
         )
+
+        print()
+
+        print(
+            "Evaluation result       : "
+            f"{INCIDENT_EVALUATION_RESULT_PATH}"
+        )
+
+
+        if registry_updated:
+            print(
+                "Evaluation registry    : rebuilt"
+            )
+
+        else:
+            print(
+                "Evaluation registry    : waiting for "
+                + ", ".join(
+                    missing_registry_parts
+                )
+            )
 
         print("=" * 78)
 

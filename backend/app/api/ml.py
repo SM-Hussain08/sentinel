@@ -27,6 +27,10 @@ from app.schemas.ml import (
     MLRiskDistribution,
     MLSummary,
 )
+from app.selected_detector import (
+    SELECTED_DETECTOR,
+    SELECTED_MODEL_MANIFEST_PATH,
+)
 
 
 router = APIRouter(
@@ -37,30 +41,12 @@ router = APIRouter(
 )
 
 
-DETECTOR_NAME = "isolation-forest"
-DETECTOR_VERSION = "1.1"
-
-
-PROJECT_ROOT = (
-    Path(__file__).resolve().parents[3]
-)
-
-
-MODEL_MANIFEST_PATH = (
-    PROJECT_ROOT
-    / "ml_engine"
-    / "models"
-    / "artifacts"
-    / "sentinel_iforest_v1_1_manifest.json"
-)
-
-
 @router.get(
     "/model",
     response_model=MLModelInfo,
 )
 def get_model_info() -> MLModelInfo:
-    if not MODEL_MANIFEST_PATH.exists():
+    if not SELECTED_MODEL_MANIFEST_PATH.exists():
         raise HTTPException(
             status_code=503,
             detail=(
@@ -70,7 +56,7 @@ def get_model_info() -> MLModelInfo:
         )
 
     manifest = json.loads(
-        MODEL_MANIFEST_PATH.read_text(
+        SELECTED_MODEL_MANIFEST_PATH.read_text(
             encoding="utf-8",
         )
     )
@@ -139,9 +125,9 @@ def get_ml_summary(
 ) -> MLSummary:
     base_filters = (
         AnomalyScore.detector_name
-        == DETECTOR_NAME,
+        == SELECTED_DETECTOR.name,
         AnomalyScore.detector_version
-        == DETECTOR_VERSION,
+        == SELECTED_DETECTOR.version,
     )
 
     events_scored = int(
@@ -218,8 +204,8 @@ def get_ml_summary(
     )
 
     return MLSummary(
-        detector_name=DETECTOR_NAME,
-        detector_version=DETECTOR_VERSION,
+        detector_name=SELECTED_DETECTOR.name,
+        detector_version=SELECTED_DETECTOR.version,
 
         events_scored=events_scored,
         alert_count=alert_count,
@@ -303,10 +289,10 @@ def get_ml_anomalies(
         )
         .where(
             AnomalyScore.detector_name
-            == DETECTOR_NAME,
+            == SELECTED_DETECTOR.name,
 
             AnomalyScore.detector_version
-            == DETECTOR_VERSION,
+            == SELECTED_DETECTOR.version,
 
             AnomalyScore.risk_level
             != "NORMAL",
@@ -403,10 +389,10 @@ def get_event_ml_analysis(
             == event_id,
 
             AnomalyScore.detector_name
-            == DETECTOR_NAME,
+            == SELECTED_DETECTOR.name,
 
             AnomalyScore.detector_version
-            == DETECTOR_VERSION,
+            == SELECTED_DETECTOR.version,
         )
     ).first()
 

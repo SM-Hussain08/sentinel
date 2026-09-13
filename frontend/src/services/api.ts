@@ -15,6 +15,31 @@ import type {
   MLAnomalyFeedPage,
 } from "../types/api";
 
+import type {
+  AIIncidentChatRequest,
+  AIIncidentChatResponse,
+  AIInvestigationResponse,
+  AIServiceStatus,
+} from "../types/ai";
+
+export class SentinelApiError extends Error {
+  status: number;
+
+  constructor(
+    message: string,
+    status: number,
+  ) {
+    super(
+      message,
+    );
+
+    this.name =
+      "SentinelApiError";
+
+    this.status =
+      status;
+  }
+}
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
@@ -31,8 +56,31 @@ async function request<T>(
   );
 
   if (!response.ok) {
-    throw new Error(
-      `SENTINEL API request failed: ${response.status} ${response.statusText}`,
+    let detail =
+      `SENTINEL API request failed: ${response.status} ${response.statusText}`;
+
+    try {
+      const errorBody =
+        await response.json() as {
+          detail?: string;
+        };
+
+      if (
+        typeof errorBody.detail
+          === "string"
+        && errorBody.detail.trim()
+      ) {
+        detail =
+          errorBody.detail;
+      }
+    } catch {
+      // Keep the generic HTTP message when
+      // the backend does not return JSON.
+    }
+
+    throw new SentinelApiError(
+      detail,
+      response.status,
     );
   }
 
@@ -240,5 +288,48 @@ export function getMLAnomalyPage(
     MLAnomalyFeedPage
   >(
     `/ml/anomalies/paged?${params.toString()}`,
+  );
+}
+
+export function getAIServiceStatus() {
+  return request<AIServiceStatus>(
+    "/ai/status",
+  );
+}
+
+
+export function generateAIInvestigation(
+  incidentId: string,
+) {
+  return request<AIInvestigationResponse>(
+    `/ai/incidents/${encodeURIComponent(
+      incidentId,
+    )}/investigation`,
+    {
+      method: "POST",
+    },
+  );
+}
+
+export function sendAIIncidentChatMessage(
+  incidentId: string,
+  chatRequest: AIIncidentChatRequest,
+) {
+  return request<AIIncidentChatResponse>(
+    `/ai/incidents/${encodeURIComponent(
+      incidentId,
+    )}/chat`,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+
+      body: JSON.stringify(
+        chatRequest,
+      ),
+    },
   );
 }

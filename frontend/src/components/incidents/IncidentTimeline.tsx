@@ -1,3 +1,7 @@
+import {
+  useNavigate,
+} from "react-router-dom";
+
 import type {
   IncidentTimelineEvent,
 } from "../../types/api";
@@ -47,6 +51,21 @@ function formatEventType(
 function IncidentTimeline({
   events,
 }: IncidentTimelineProps) {
+  const navigate =
+    useNavigate();
+
+
+  function openAnomaly(
+    eventId: string,
+  ) {
+    navigate(
+      `/anomalies/${encodeURIComponent(
+        eventId,
+      )}`,
+    );
+  }
+
+
   return (
     <article
       className="
@@ -62,9 +81,14 @@ function IncidentTimeline({
         helper={`${events.length} correlated events`}
       />
 
+
       <div
         className="
           mt-6
+          max-h-[720px]
+          overflow-y-auto
+          overscroll-contain
+          pr-2
         "
       >
         {events.map(
@@ -76,12 +100,14 @@ function IncidentTimeline({
               event.risk_level
               === "CRITICAL";
 
+
             return (
               <div
                 key={
                   event.event_id
                 }
                 className="
+                  group
                   relative flex
                   gap-4 pb-5
                   last:pb-0
@@ -98,9 +124,13 @@ function IncidentTimeline({
                         bottom-0
                         w-px
                         bg-slate-800
+                        transition-colors
+                        duration-200
+                        group-hover:bg-slate-700
                       "
                     />
                   )}
+
 
                 <div
                   className={[
@@ -111,42 +141,89 @@ function IncidentTimeline({
                     "justify-center",
                     "rounded-full",
                     "border",
+                    "transition-all",
+                    "duration-200",
+
                     critical
                       ? (
-                        "border-red-900/60 "
-                        + "bg-red-950/35"
-                      )
+                          "border-red-900/60 "
+                          + "bg-red-950/35 "
+                          + "group-hover:border-red-800/80 "
+                          + "group-hover:bg-red-950/50 "
+                          + "group-hover:shadow-[0_0_14px_rgba(248,113,113,0.10)]"
+                        )
                       : (
-                        "border-slate-700 "
-                        + "bg-[#0b111c]"
-                      ),
+                          "border-slate-700 "
+                          + "bg-[#0b111c] "
+                          + "group-hover:border-cyan-900/70 "
+                          + "group-hover:bg-cyan-950/20 "
+                          + "group-hover:shadow-[0_0_14px_rgba(34,211,238,0.08)]"
+                        ),
                   ].join(" ")}
                 >
                   <span
                     className={[
                       "h-2 w-2",
                       "rounded-full",
+                      "transition-all",
+                      "duration-200",
+
                       critical
-                        ? "bg-red-400"
-                        : "bg-cyan-500",
+                        ? (
+                            "bg-red-400 "
+                            + "group-hover:scale-110"
+                          )
+                        : (
+                            "bg-cyan-500 "
+                            + "group-hover:scale-110 "
+                            + "group-hover:bg-cyan-400"
+                          ),
                     ].join(" ")}
                   />
                 </div>
 
-                <div
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    openAnomaly(
+                      event.event_id,
+                    );
+                  }}
                   className="
+                    group/card
+                    relative
                     min-w-0 flex-1
+                    overflow-hidden
                     rounded-xl
                     border
                     border-slate-800
                     bg-[#0b111c]
                     px-4 py-3
+                    text-left
                     transition-all
                     duration-200
-                    hover:border-slate-700
+                    hover:-translate-y-0.5
+                    hover:border-cyan-900/60
                     hover:bg-[#111a28]
+                    hover:shadow-[0_10px_28px_rgba(0,0,0,0.14)]
                   "
                 >
+                  <div
+                    className="
+                      pointer-events-none
+                      absolute
+                      inset-y-0
+                      left-0
+                      w-[2px]
+                      bg-cyan-400/0
+                      transition-all
+                      duration-200
+                      group-hover/card:bg-cyan-400/50
+                    "
+                  />
+
+
                   <div
                     className="
                       flex flex-col
@@ -156,10 +233,15 @@ function IncidentTimeline({
                       sm:justify-between
                     "
                   >
-                    <div>
+                    <div
+                      className="
+                        min-w-0
+                      "
+                    >
                       <div
                         className="
-                          flex flex-wrap
+                          flex
+                          flex-wrap
                           items-center
                           gap-2
                         "
@@ -169,6 +251,9 @@ function IncidentTimeline({
                             font-mono
                             text-[9px]
                             text-cyan-500
+                            transition-colors
+                            duration-200
+                            group-hover/card:text-cyan-300
                           "
                         >
                           {
@@ -177,12 +262,16 @@ function IncidentTimeline({
                           }
                         </span>
 
+
                         <span
                           className="
                             text-[10px]
                             uppercase
                             tracking-[0.1em]
                             text-slate-600
+                            transition-colors
+                            duration-200
+                            group-hover/card:text-slate-500
                           "
                         >
                           {formatEventType(
@@ -191,10 +280,15 @@ function IncidentTimeline({
                         </span>
                       </div>
 
+
                       <p
                         className="
-                          mt-1 text-xs
+                          mt-1
+                          text-xs
                           text-slate-500
+                          transition-colors
+                          duration-200
+                          group-hover/card:text-slate-400
                         "
                       >
                         {
@@ -202,7 +296,9 @@ function IncidentTimeline({
                             .source_ip
                           ?? "—"
                         }
+
                         {" → "}
+
                         {
                           event
                             .destination_ip
@@ -211,43 +307,82 @@ function IncidentTimeline({
                       </p>
                     </div>
 
+
                     <div
                       className="
-                        text-left
-                        sm:text-right
+                        flex
+                        shrink-0
+                        items-center
+                        gap-4
                       "
                     >
-                      <p
+                      <div
                         className="
-                          text-xs
-                          text-slate-400
+                          text-left
+                          sm:text-right
                         "
                       >
-                        {formatTimestamp(
-                          event.timestamp,
-                        )}
-                      </p>
+                        <p
+                          className="
+                            text-xs
+                            text-slate-400
+                          "
+                        >
+                          {formatTimestamp(
+                            event.timestamp,
+                          )}
+                        </p>
 
-                      <p
-                        className={[
-                          "mt-1 text-[10px]",
-                          "font-semibold",
-                          critical
-                            ? "text-red-300"
-                            : "text-slate-600",
-                        ].join(" ")}
+
+                        <p
+                          className={[
+                            "mt-1",
+                            "text-[10px]",
+                            "font-semibold",
+
+                            critical
+                              ? "text-red-300"
+                              : "text-slate-600",
+                          ].join(" ")}
+                        >
+                          Anomaly{" "}
+                          {(
+                            event
+                              .anomaly_score
+                            * 100
+                          ).toFixed(1)}
+                          %
+                        </p>
+                      </div>
+
+
+                      <span
+                        aria-hidden="true"
+                        className="
+                          hidden
+                          h-8 w-8
+                          items-center
+                          justify-center
+                          rounded-lg
+                          border
+                          border-slate-800
+                          bg-[#0a1019]
+                          text-sm
+                          text-slate-600
+                          transition-all
+                          duration-200
+                          group-hover/card:translate-x-1
+                          group-hover/card:border-cyan-900/70
+                          group-hover/card:bg-cyan-950/20
+                          group-hover/card:text-cyan-300
+                          sm:flex
+                        "
                       >
-                        Anomaly{" "}
-                        {(
-                          event
-                            .anomaly_score
-                          * 100
-                        ).toFixed(1)}
-                        %
-                      </p>
+                        →
+                      </span>
                     </div>
                   </div>
-                </div>
+                </button>
               </div>
             );
           },

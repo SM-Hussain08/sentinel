@@ -5,34 +5,108 @@ import {
 } from "react";
 
 import {
-  getIncidentDetail,
-  getIncidentInvestigation,
+  useNavigate,
+} from "react-router-dom";
+
+import {
   getIncidents,
-  getIncidentTimeline,
+  getIncidentSummary,
 } from "../services/api";
 
 import type {
-  IncidentDetail,
-  IncidentInvestigation,
   IncidentListItem,
   IncidentSeverity,
-  IncidentTimelineEvent,
+  IncidentSummary,
 } from "../types/api";
 
+import IncidentKpiCard from "../components/incidents/IncidentKpiCard";
 import IncidentQueue from "../components/incidents/IncidentQueue";
-import IncidentHero from "../components/incidents/IncidentHero";
-import IncidentIndicators from "../components/incidents/IncidentIndicators";
-import IncidentTimeline from "../components/incidents/IncidentTimeline";
-import InvestigationPanel from "../components/incidents/InvestigationPanel";
-import DecisionSupportPanel from "../components/incidents/DecisionSupportPanel";
-import AIInvestigator from "../components/incidents/AIInvestigator";
-import AIAnalystChat from "../components/incidents/AIAnalystChat";
+
 
 type SeverityFilter =
   | "ALL"
   | IncidentSeverity;
 
+
+type SortOption =
+  | "NEWEST"
+  | "OLDEST"
+  | "SEVERITY"
+  | "EVENTS";
+
+
+const INCIDENTS_PER_PAGE = 15;
+
+const MAX_INCIDENTS_TO_LOAD = 500;
+
+
+const SEVERITY_RANK:
+  Record<
+    IncidentSeverity,
+    number
+  > = {
+    CRITICAL: 3,
+    HIGH: 2,
+    MEDIUM: 1,
+  };
+
+
+function formatRefreshLabel(
+  ageSeconds: number,
+  refreshedAt: number | null,
+): string {
+  if (
+    refreshedAt === null
+  ) {
+    return "Waiting for refresh";
+  }
+
+  if (
+    ageSeconds < 5
+  ) {
+    return "Refreshed just now";
+  }
+
+  if (
+    ageSeconds < 60
+  ) {
+    return `Refreshed ${ageSeconds}s ago`;
+  }
+
+  if (
+    ageSeconds < 3600
+  ) {
+    const minutes =
+      Math.floor(
+        ageSeconds / 60,
+      );
+
+    return `Refreshed ${minutes} ${
+      minutes === 1
+        ? "min"
+        : "mins"
+    } ago`;
+  }
+
+  const formattedTime =
+    new Date(
+      refreshedAt,
+    ).toLocaleTimeString(
+      undefined,
+      {
+        hour: "numeric",
+        minute: "2-digit",
+      },
+    );
+
+  return `Last refreshed at ${formattedTime}`;
+}
+
+
 function IncidentsPage() {
+  const navigate =
+    useNavigate();
+
   const [
     incidents,
     setIncidents,
@@ -41,31 +115,10 @@ function IncidentsPage() {
   >([]);
 
   const [
-    selectedIncidentId,
-    setSelectedIncidentId,
+    summary,
+    setSummary,
   ] = useState<
-    string | null
-  >(null);
-
-  const [
-    detail,
-    setDetail,
-  ] = useState<
-    IncidentDetail | null
-  >(null);
-
-  const [
-    timeline,
-    setTimeline,
-  ] = useState<
-    IncidentTimelineEvent[]
-  >([]);
-
-  const [
-    investigation,
-    setInvestigation,
-  ] = useState<
-    IncidentInvestigation | null
+    IncidentSummary | null
   >(null);
 
   const [
@@ -81,14 +134,21 @@ function IncidentsPage() {
   >("ALL");
 
   const [
+    sortOption,
+    setSortOption,
+  ] = useState<
+    SortOption
+  >("NEWEST");
+
+  const [
+    currentPage,
+    setCurrentPage,
+  ] = useState(1);
+
+  const [
     isLoading,
     setIsLoading,
   ] = useState(true);
-
-  const [
-    detailLoading,
-    setDetailLoading,
-  ] = useState(false);
 
   const [
     isRefreshing,
@@ -102,59 +162,34 @@ function IncidentsPage() {
     string | null
   >(null);
 
+  const [
+    lastRefreshedAt,
+    setLastRefreshedAt,
+  ] = useState<
+    number | null
+  >(null);
+
+  const [
+    refreshAgeSeconds,
+    setRefreshAgeSeconds,
+  ] = useState(0);
+
+
   useEffect(() => {
-    let cancelled = false;
+    let cancelled =
+      false;
 
-    async function loadInitialWorkspace() {
+    async function loadIncidents() {
       try {
-        const incidentList =
-          await getIncidents(
-            100,
-          );
-
-        if (
-          cancelled
-        ) {
-          return;
-        }
-
-        if (
-          incidentList.length
-          === 0
-        ) {
-          setIncidents(
-            [],
-          );
-
-          setIsLoading(
-            false,
-          );
-
-          return;
-        }
-
-        const firstIncident =
-          incidentList[0];
-
         const [
-          incidentDetail,
-          incidentTimeline,
-          incidentInvestigation,
+          incidentList,
+          incidentSummary,
         ] = await Promise.all([
-          getIncidentDetail(
-            firstIncident
-              .incident_id,
+          getIncidents(
+            MAX_INCIDENTS_TO_LOAD,
           ),
 
-          getIncidentTimeline(
-            firstIncident
-              .incident_id,
-          ),
-
-          getIncidentInvestigation(
-            firstIncident
-              .incident_id,
-          ),
+          getIncidentSummary(),
         ]);
 
         if (
@@ -167,32 +202,27 @@ function IncidentsPage() {
           incidentList,
         );
 
-        setSelectedIncidentId(
-          firstIncident
-            .incident_id,
-        );
-
-        setDetail(
-          incidentDetail,
-        );
-
-        setTimeline(
-          incidentTimeline,
-        );
-
-        setInvestigation(
-          incidentInvestigation,
+        setSummary(
+          incidentSummary,
         );
 
         setError(
           null,
+        );
+
+        setLastRefreshedAt(
+          Date.now(),
+        );
+
+        setRefreshAgeSeconds(
+          0,
         );
       } catch {
         if (
           !cancelled
         ) {
           setError(
-            "SENTINEL could not load the incident workspace. Confirm that the backend and PostgreSQL are running.",
+            "SENTINEL could not load incident intelligence. Confirm that the backend and PostgreSQL are running.",
           );
         }
       } finally {
@@ -206,133 +236,70 @@ function IncidentsPage() {
       }
     }
 
-    void loadInitialWorkspace();
+    void loadIncidents();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  async function selectIncident(
-    incidentId: string,
-  ) {
-    if (
-      incidentId
-      === selectedIncidentId
-    ) {
-      return;
-    }
 
-    setSelectedIncidentId(
-      incidentId,
-    );
-
-    setDetailLoading(
-      true,
-    );
-
-    try {
-      const [
-        incidentDetail,
-        incidentTimeline,
-        incidentInvestigation,
-      ] = await Promise.all([
-        getIncidentDetail(
-          incidentId,
-        ),
-
-        getIncidentTimeline(
-          incidentId,
-        ),
-
-        getIncidentInvestigation(
-          incidentId,
-        ),
-      ]);
-
-      setDetail(
-        incidentDetail,
+  useEffect(() => {
+    const intervalId =
+      window.setInterval(
+        () => {
+          setRefreshAgeSeconds(
+            (current) =>
+              current + 1,
+          );
+        },
+        1000,
       );
 
-      setTimeline(
-        incidentTimeline,
+    return () => {
+      window.clearInterval(
+        intervalId,
       );
+    };
+  }, []);
 
-      setInvestigation(
-        incidentInvestigation,
-      );
 
-      setError(
-        null,
-      );
-    } catch {
-      setError(
-        "SENTINEL could not load the selected incident investigation.",
-      );
-    } finally {
-      setDetailLoading(
-        false,
-      );
-    }
-  }
-
-  async function refreshWorkspace() {
+  async function refreshIncidents() {
     setIsRefreshing(
       true,
     );
 
     try {
-      const incidentList =
-        await getIncidents(
-          100,
-        );
+      const [
+        incidentList,
+        incidentSummary,
+      ] = await Promise.all([
+        getIncidents(
+          MAX_INCIDENTS_TO_LOAD,
+        ),
+
+        getIncidentSummary(),
+      ]);
 
       setIncidents(
         incidentList,
       );
 
-      const incidentId =
-        selectedIncidentId
-        ?? incidentList[0]
-          ?.incident_id;
+      setSummary(
+        incidentSummary,
+      );
 
-      if (
-        incidentId
-      ) {
-        const [
-          incidentDetail,
-          incidentTimeline,
-          incidentInvestigation,
-        ] = await Promise.all([
-          getIncidentDetail(
-            incidentId,
-          ),
+      setCurrentPage(
+        1,
+      );
 
-          getIncidentTimeline(
-            incidentId,
-          ),
+      setLastRefreshedAt(
+        Date.now(),
+      );
 
-          getIncidentInvestigation(
-            incidentId,
-          ),
-        ]);
-
-        setSelectedIncidentId(
-          incidentId,
-        );
-
-        setDetail(
-          incidentDetail,
-        );
-
-        setTimeline(
-          incidentTimeline,
-        );
-
-        setInvestigation(
-          incidentInvestigation,
-        );
-      }
+      setRefreshAgeSeconds(
+        0,
+      );
 
       setError(
         null,
@@ -348,91 +315,187 @@ function IncidentsPage() {
     }
   }
 
-  const filteredIncidents =
+
+  const incidentCounts =
+    useMemo(
+      () => ({
+        ALL:
+          incidents.length,
+
+        CRITICAL:
+          incidents.filter(
+            (incident) =>
+              incident.severity
+              === "CRITICAL",
+          ).length,
+
+        HIGH:
+          incidents.filter(
+            (incident) =>
+              incident.severity
+              === "HIGH",
+          ).length,
+
+        MEDIUM:
+          incidents.filter(
+            (incident) =>
+              incident.severity
+              === "MEDIUM",
+          ).length,
+      }),
+      [
+        incidents,
+      ],
+    );
+
+
+  const filteredAndSortedIncidents =
     useMemo(() => {
       const normalized =
         searchQuery
           .trim()
           .toLowerCase();
 
-      return incidents.filter(
-        (incident) => {
-          const severityMatch =
-            severityFilter
-              === "ALL"
-            || incident.severity
-              === severityFilter;
+      const filtered =
+        incidents.filter(
+          (incident) => {
+            const severityMatches =
+              severityFilter
+                === "ALL"
+              || incident.severity
+                === severityFilter;
 
-          if (
-            !severityMatch
+            if (
+              !severityMatches
+            ) {
+              return false;
+            }
+
+            if (
+              !normalized
+            ) {
+              return true;
+            }
+
+            return [
+              incident.incident_id,
+              incident.title,
+              incident.incident_type,
+              incident.status,
+              incident.summary,
+              incident
+                .primary_employee_user_id
+                ?? "",
+            ].some(
+              (value) =>
+                value
+                  .toLowerCase()
+                  .includes(
+                    normalized,
+                  ),
+            );
+          },
+        );
+
+      return [
+        ...filtered,
+      ].sort(
+        (first, second) => {
+          switch (
+            sortOption
           ) {
-            return false;
-          }
+            case "OLDEST":
+              return (
+                new Date(
+                  first.first_seen,
+                ).getTime()
+                - new Date(
+                  second.first_seen,
+                ).getTime()
+              );
 
-          if (
-            !normalized
-          ) {
-            return true;
-          }
+            case "SEVERITY": {
+              const severityDifference =
+                SEVERITY_RANK[
+                  second.severity
+                ]
+                - SEVERITY_RANK[
+                  first.severity
+                ];
 
-          return [
-            incident.incident_id,
-            incident.title,
-            incident.incident_type,
-            incident
-              .primary_employee_user_id
-              ?? "",
-          ].some(
-            (value) =>
-              value
-                .toLowerCase()
-                .includes(
-                  normalized,
-                ),
-          );
+              if (
+                severityDifference
+                !== 0
+              ) {
+                return severityDifference;
+              }
+
+              return (
+                new Date(
+                  second.first_seen,
+                ).getTime()
+                - new Date(
+                  first.first_seen,
+                ).getTime()
+              );
+            }
+
+            case "EVENTS":
+              return (
+                second.event_count
+                - first.event_count
+              );
+
+            case "NEWEST":
+            default:
+              return (
+                new Date(
+                  second.first_seen,
+                ).getTime()
+                - new Date(
+                  first.first_seen,
+                ).getTime()
+              );
+          }
         },
       );
     }, [
       incidents,
       searchQuery,
       severityFilter,
+      sortOption,
     ]);
 
-  const incidentCounts =
-    useMemo(() => ({
-      ALL:
-        incidents.length,
 
-      CRITICAL:
-        incidents.filter(
-          (incident) =>
-            incident.severity
-            === "CRITICAL",
-        ).length,
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filteredAndSortedIncidents.length
+        / INCIDENTS_PER_PAGE,
+      ),
+    );
 
-      HIGH:
-        incidents.filter(
-          (incident) =>
-            incident.severity
-            === "HIGH",
-        ).length,
+  const pageStart =
+    (currentPage - 1)
+    * INCIDENTS_PER_PAGE;
 
-      MEDIUM:
-        incidents.filter(
-          (incident) =>
-            incident.severity
-            === "MEDIUM",
-        ).length,
-    }), [
-      incidents,
-    ]);
+  const visibleIncidents =
+    filteredAndSortedIncidents.slice(
+      pageStart,
+      pageStart
+      + INCIDENTS_PER_PAGE,
+    );
 
-  const severityFilters: SeverityFilter[] = [
-    "ALL",
-    "CRITICAL",
-    "HIGH",
-    "MEDIUM",
-  ];
+
+  const severityFilters:
+    SeverityFilter[] = [
+      "ALL",
+      "CRITICAL",
+      "HIGH",
+      "MEDIUM",
+    ];
+
 
   if (
     isLoading
@@ -441,8 +504,7 @@ function IncidentsPage() {
       <main
         className="
           flex min-h-screen
-          items-center
-          justify-center
+          items-center justify-center
           bg-[#0b111b]/55
         "
       >
@@ -478,6 +540,7 @@ function IncidentsPage() {
     );
   }
 
+
   return (
     <main
       className="
@@ -494,13 +557,10 @@ function IncidentsPage() {
           max-w-[1600px]
         "
       >
-        {/* ─────────────────────────────────────────────
-            Header
-            ───────────────────────────────────────────── */}
+        {/* Header */}
         <header
           className="
-            flex flex-col
-            gap-5
+            flex flex-col gap-5
             lg:flex-row
             lg:items-end
             lg:justify-between
@@ -525,8 +585,7 @@ function IncidentsPage() {
               <p
                 className="
                   text-[10px]
-                  font-semibold
-                  uppercase
+                  font-semibold uppercase
                   tracking-[0.19em]
                   text-cyan-400
                 "
@@ -537,8 +596,8 @@ function IncidentsPage() {
 
             <h1
               className="
-                mt-3 text-3xl
-                font-semibold
+                mt-3
+                text-3xl font-semibold
                 tracking-tight
                 text-white
                 sm:text-4xl
@@ -549,422 +608,562 @@ function IncidentsPage() {
 
             <p
               className="
-                mt-3 max-w-3xl
+                mt-3
+                max-w-3xl
                 text-sm leading-6
                 text-slate-500
               "
             >
-              Prioritize correlated
-              threats, reconstruct event
-              timelines and review
-              deterministic investigation
-              guidance from SENTINEL.
+              Prioritize correlated threats,
+              review active security incidents
+              and open a dedicated investigation
+              workspace for deeper analysis.
             </p>
           </div>
 
-          <button
-            type="button"
-            disabled={
-              isRefreshing
-            }
-            onClick={() => {
-              void refreshWorkspace();
-            }}
+          <div
             className="
-              self-start
-              rounded-xl
-              border border-slate-700/70
-              bg-[#121a28]
-              px-4 py-2.5
-              text-xs font-medium
-              text-slate-300
-              shadow-lg
-              transition-all
-              duration-200
-              hover:-translate-y-0.5
-              hover:border-cyan-800/70
-              hover:bg-cyan-950/20
-              hover:text-cyan-300
-              disabled:cursor-wait
-              disabled:opacity-60
-              lg:self-auto
+              flex flex-col
+              items-start gap-2
+              sm:flex-row
+              sm:items-center
+              lg:justify-end
             "
           >
-            {isRefreshing
-              ? "Refreshing..."
-              : "Refresh Incidents"}
-          </button>
+            <span
+              className="
+                rounded-xl
+                border border-slate-800
+                bg-[#0b111c]
+                px-3 py-2.5
+                text-[10px]
+                font-medium
+                text-slate-500
+              "
+            >
+              {formatRefreshLabel(
+                refreshAgeSeconds,
+                lastRefreshedAt,
+              )}
+            </span>
+
+            <button
+              type="button"
+              disabled={
+                isRefreshing
+              }
+              onClick={() => {
+                void refreshIncidents();
+              }}
+              className="
+                rounded-xl
+                border border-slate-700/70
+                bg-[#121a28]
+                px-4 py-2.5
+                text-xs font-medium
+                text-slate-300
+                shadow-lg
+                transition-all
+                duration-200
+                hover:-translate-y-0.5
+                hover:border-cyan-800/70
+                hover:bg-cyan-950/20
+                hover:text-cyan-300
+                disabled:cursor-wait
+                disabled:opacity-60
+              "
+            >
+              {isRefreshing
+                ? "Refreshing..."
+                : "Refresh Incidents"}
+            </button>
+          </div>
         </header>
+
 
         {error && (
           <div
             className="
-              mt-6 rounded-xl
+              mt-6
+              rounded-xl
               border border-red-900/60
               bg-red-950/20
               px-4 py-3
-              text-sm text-red-300
+              text-sm
+              text-red-300
             "
           >
             {error}
           </div>
         )}
 
-        {/* ─────────────────────────────────────────────
-            Filters
-            ───────────────────────────────────────────── */}
+
+        {/* KPI Cards */}
         <section
           className="
-            mt-7 flex
-            flex-col gap-3
+            mt-7 grid gap-3
+            sm:grid-cols-2
+            xl:grid-cols-4
+          "
+        >
+          <IncidentKpiCard
+            label="Total Incidents"
+            value={
+              summary
+                ?.total_incidents
+              ?? incidents.length
+            }
+            helper="Correlated incidents currently known to SENTINEL."
+            accent="cyan"
+          />
+
+          <IncidentKpiCard
+            label="Open Incidents"
+            value={
+              summary
+                ?.open_incidents
+              ?? incidents.filter(
+                (incident) =>
+                  incident.status
+                  === "OPEN",
+              ).length
+            }
+            helper="Incidents still requiring analyst attention."
+            accent="emerald"
+          />
+
+          <IncidentKpiCard
+            label="Critical Incidents"
+            value={
+              summary
+                ?.critical_incidents
+              ?? incidentCounts
+                .CRITICAL
+            }
+            helper="Highest-priority investigations in the queue."
+            accent="red"
+          />
+
+          <IncidentKpiCard
+            label="Correlated Events"
+            value={
+              summary
+                ?.total_correlated_events
+              ?? incidents.reduce(
+                (
+                  total,
+                  incident,
+                ) =>
+                  total
+                  + incident.event_count,
+                0,
+              )
+            }
+            helper="Security events linked into incident investigations."
+            accent="orange"
+          />
+        </section>
+
+
+        {/* Filters */}
+        <section
+          className="
+            mt-5
             rounded-2xl
             border border-slate-700/55
             bg-[#101826]/90
             p-4
-            lg:flex-row
-            lg:items-center
-            lg:justify-between
           "
         >
           <div
             className="
-              flex flex-wrap gap-2
+              flex flex-col gap-4
+              xl:flex-row
+              xl:items-center
+              xl:justify-between
             "
           >
-            {severityFilters.map(
-              (severity) => {
-                const active =
-                  severityFilter
-                  === severity;
-
-                return (
-                  <button
-                    key={severity}
-                    type="button"
-                    onClick={() =>
-                      setSeverityFilter(
-                        severity,
-                      )
-                    }
-                    className={[
-                      "rounded-lg border",
-                      "px-3 py-2",
-                      "text-[10px]",
-                      "font-semibold",
-                      "tracking-[0.11em]",
-                      "transition-all",
-                      "duration-200",
-                      active
-                        ? (
-                          "border-cyan-800/70 " +
-                          "bg-cyan-950/30 " +
-                          "text-cyan-300"
-                        )
-                        : (
-                          "border-slate-800 " +
-                          "bg-[#0b111c] " +
-                          "text-slate-500 " +
-                          "hover:border-slate-700 " +
-                          "hover:text-slate-300"
-                        ),
-                    ].join(" ")}
-                  >
-                    {severity}{" "}
-
-                    <span
-                      className="
-                        ml-1 text-slate-600
-                      "
-                    >
-                      {
-                        incidentCounts[
-                          severity
-                        ]
-                      }
-                    </span>
-                  </button>
-                );
-              },
-            )}
-          </div>
-
-          <div
-            className="
-              relative w-full
-              lg:max-w-sm
-            "
-          >
-            <span
+            <div
               className="
-                pointer-events-none
-                absolute left-3
-                top-1/2
-                -translate-y-1/2
-                text-xs
-                text-slate-600
+                flex flex-wrap
+                gap-2
               "
             >
-              ⌕
-            </span>
+              {severityFilters.map(
+                (severity) => {
+                  const active =
+                    severityFilter
+                    === severity;
 
-            <input
-              type="search"
-              value={
-                searchQuery
-              }
-              onChange={
-                (event) =>
-                  setSearchQuery(
-                    event.target.value,
-                  )
-              }
-              placeholder="Search incident, identity or type..."
+                  return (
+                    <button
+                      key={severity}
+                      type="button"
+                      onClick={() => {
+                        setSeverityFilter(
+                          severity,
+                        );
+
+                        setCurrentPage(
+                          1,
+                        );
+                      }}
+                      className={[
+                        "rounded-lg border",
+                        "px-3 py-2",
+                        "text-[10px]",
+                        "font-semibold",
+                        "tracking-[0.11em]",
+                        "transition-all",
+                        "duration-200",
+                        active
+                          ? (
+                              "border-cyan-800/70 "
+                              + "bg-cyan-950/30 "
+                              + "text-cyan-300 "
+                              + "shadow-[0_0_18px_rgba(34,211,238,0.04)]"
+                            )
+                          : (
+                              "border-slate-800 "
+                              + "bg-[#0b111c] "
+                              + "text-slate-500 "
+                              + "hover:-translate-y-0.5 "
+                              + "hover:border-slate-700 "
+                              + "hover:text-slate-300"
+                            ),
+                      ].join(" ")}
+                    >
+                      {severity}
+                      {" "}
+
+                      <span
+                        className="
+                          ml-1
+                          text-slate-600
+                        "
+                      >
+                        {
+                          incidentCounts[
+                            severity
+                          ]
+                        }
+                      </span>
+                    </button>
+                  );
+                },
+              )}
+            </div>
+
+            <div
               className="
-                w-full rounded-xl
-                border border-slate-800
-                bg-[#0b111c]
-                py-2.5 pl-9 pr-3
-                text-xs
-                text-slate-200
-                outline-none
-                transition-all
-                placeholder:text-slate-700
-                focus:border-cyan-900
-                focus:ring-2
-                focus:ring-cyan-950/40
+                flex w-full
+                flex-col gap-3
+                sm:flex-row
+                xl:max-w-2xl
               "
-            />
+            >
+              <div
+                className="
+                  relative
+                  min-w-0 flex-1
+                "
+              >
+                <span
+                  className="
+                    pointer-events-none
+                    absolute left-3
+                    top-1/2
+                    -translate-y-1/2
+                    text-xs
+                    text-slate-600
+                  "
+                >
+                  ⌕
+                </span>
+
+                <input
+                  type="search"
+                  value={
+                    searchQuery
+                  }
+                  onChange={
+                    (event) => {
+                      setSearchQuery(
+                        event.target.value,
+                      );
+
+                      setCurrentPage(
+                        1,
+                      );
+                    }
+                  }
+                  placeholder="Search incident, identity or type..."
+                  className="
+                    w-full
+                    rounded-xl
+                    border border-slate-800
+                    bg-[#0b111c]
+                    py-2.5 pl-9 pr-3
+                    text-xs
+                    text-slate-200
+                    outline-none
+                    transition-all
+                    placeholder:text-slate-700
+                    focus:border-cyan-900
+                    focus:ring-2
+                    focus:ring-cyan-950/40
+                  "
+                />
+              </div>
+
+              <select
+                value={
+                  sortOption
+                }
+                onChange={
+                  (event) => {
+                    setSortOption(
+                      event.target.value as SortOption,
+                    );
+
+                    setCurrentPage(
+                      1,
+                    );
+                  }
+                }
+                aria-label="Sort incidents"
+                className="
+                  rounded-xl
+                  border border-slate-800
+                  bg-[#0b111c]
+                  px-3 py-2.5
+                  text-xs
+                  text-slate-400
+                  outline-none
+                  transition-all
+                  hover:border-slate-700
+                  focus:border-cyan-900
+                  focus:ring-2
+                  focus:ring-cyan-950/40
+                "
+              >
+                <option
+                  value="NEWEST"
+                >
+                  Newest first
+                </option>
+
+                <option
+                  value="OLDEST"
+                >
+                  Oldest first
+                </option>
+
+                <option
+                  value="SEVERITY"
+                >
+                  Severity — highest first
+                </option>
+
+                <option
+                  value="EVENTS"
+                >
+                  Most events
+                </option>
+              </select>
+            </div>
           </div>
         </section>
 
-        {/* ─────────────────────────────────────────────
-            Main Workspace
-            ───────────────────────────────────────────── */}
-        <section
+
+        {/* Incident Queue */}
+        <div
           className="
-            mt-4 grid
-            gap-4
-            2xl:grid-cols-[390px_1fr]
+            mt-4
           "
         >
-          {/* ───────────────────────────────────────
-              Incident Queue
-              ─────────────────────────────────────── */}
           <IncidentQueue
             incidents={
-              filteredIncidents
+              visibleIncidents
             }
-            selectedIncidentId={
-              selectedIncidentId
+            totalFiltered={
+              filteredAndSortedIncidents
+                .length
             }
-            onSelectIncident={(
+            pageStart={
+              pageStart
+            }
+            onOpenIncident={(
               incidentId,
             ) => {
-              void selectIncident(
-                incidentId,
+              navigate(
+                `/incidents/${encodeURIComponent(
+                  incidentId,
+                )}`,
               );
             }}
           />
+        </div>
 
-          {/* ───────────────────────────────────────
-              Investigation Detail
-              ─────────────────────────────────────── */}
-          <div
+
+        {/* Pagination */}
+        <section
+          className="
+            mt-4
+            flex flex-col gap-3
+            rounded-2xl
+            border border-slate-800/80
+            bg-[#0d1521]/75
+            px-4 py-3
+            sm:flex-row
+            sm:items-center
+            sm:justify-between
+          "
+        >
+          <button
+            type="button"
+            disabled={
+              currentPage <= 1
+            }
+            onClick={() => {
+              setCurrentPage(
+                (current) =>
+                  Math.max(
+                    1,
+                    current - 1,
+                  ),
+              );
+
+              window.scrollTo({
+                top: 0,
+                behavior: "smooth",
+              });
+            }}
             className="
-              min-w-0
+              rounded-lg
+              border border-slate-800
+              bg-[#0b111c]
+              px-3.5 py-2
+              text-xs
+              text-slate-400
+              transition-all
+              hover:-translate-y-0.5
+              hover:border-cyan-900/60
+              hover:text-cyan-300
+              disabled:cursor-not-allowed
+              disabled:opacity-35
+              disabled:hover:translate-y-0
+              disabled:hover:border-slate-800
+              disabled:hover:text-slate-400
             "
           >
-            {detailLoading && (
-              <div
+            ← Previous
+          </button>
+
+          <div
+            className="
+              text-center
+            "
+          >
+            <p
+              className="
+                text-xs
+                font-medium
+                text-slate-400
+              "
+            >
+              Page
+              {" "}
+              <span
                 className="
-                  flex min-h-[600px]
-                  items-center
-                  justify-center
-                  rounded-2xl
-                  border border-slate-700/55
-                  bg-[#101826]/90
+                  text-slate-200
                 "
               >
-                <div
-                  className="
-                    flex flex-col
-                    items-center gap-4
-                  "
-                >
-                  <div
-                    className="
-                      h-8 w-8
-                      animate-spin
-                      rounded-full
-                      border-2
-                      border-slate-700
-                      border-t-cyan-400
-                    "
-                  />
+                {currentPage}
+              </span>
+              {" of "}
+              <span
+                className="
+                  text-slate-200
+                "
+              >
+                {totalPages}
+              </span>
+            </p>
 
-                  <p
-                    className="
-                      text-[10px]
-                      uppercase
-                      tracking-[0.15em]
-                      text-slate-600
-                    "
-                  >
-                    Loading Investigation
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {!detailLoading
-              && detail
-              && investigation && (
-                <div
-                  key={
-                    detail
-                      .incident_id
-                  }
-                  className="
-                    sentinel-page-enter
-                    space-y-4
-                  "
-                >
-                  {/* ─────────────────────────────
-                      Incident Hero
-                      ───────────────────────────── */}
-                  <IncidentHero
-                    incident={
-                      detail
-                    }
-                  />
-
-                  {/* ─────────────────────────────
-                      Key Indicators
-                      ───────────────────────────── */}
-                  <IncidentIndicators
-                    indicators={
-                      detail.indicators
-                    }
-                  />
-
-                  {/* ─────────────────────────────
-                      Timeline
-                      ───────────────────────────── */}
-                  <IncidentTimeline
-                    events={
-                      timeline
-                    }
-                  />
-
-                  {/* ─────────────────────────────
-                      Findings + Severity
-                      ───────────────────────────── */}
-                  <InvestigationPanel
-                    investigation={
-                      investigation
-                    }
-                    severity={
-                      detail.severity
-                    }
-                  />
-
-                  {/* ─────────────────────────────
-                      AI Investigation
-                      ───────────────────────────── */}
-                  <AIInvestigator
-                    incidentId={
-                      detail.incident_id
-                    }
-                  />
-
-                  {/* ─────────────────────────────
-                      AI Chat
-                      ───────────────────────────── */}
-
-                  <AIAnalystChat
-                    key={
-                      detail.incident_id
-                    }
-                    incidentId={
-                      detail.incident_id
-                    }
-                  />
-
-                  {/* ─────────────────────────────
-                      Questions + Containment
-                      ───────────────────────────── */}
-                  <DecisionSupportPanel
-                    analystQuestions={
-                      investigation.analyst_questions
-                    }
-                    containmentActions={
-                      investigation.containment_actions
-                    }
-                  />
-                </div>
-              )}
-
-            {!detailLoading
-              && !detail && (
-                <div
-                  className="
-                    flex min-h-[550px]
-                    items-center
-                    justify-center
-                    rounded-2xl
-                    border
-                    border-slate-700/55
-                    bg-[#101826]/90
-                    p-8
-                    text-center
-                  "
-                >
-                  <div>
-                    <p
-                      className="
-                        text-sm
-                        font-medium
-                        text-slate-400
-                      "
-                    >
-                      Select an incident
-                      to begin investigation.
-                    </p>
-
-                    <p
-                      className="
-                        mt-2 text-xs
-                        text-slate-600
-                      "
-                    >
-                      SENTINEL will load
-                      its correlated evidence,
-                      timeline and analyst
-                      guidance.
-                    </p>
-                  </div>
-                </div>
-              )}
+            <p
+              className="
+                mt-1
+                text-[10px]
+                text-slate-700
+              "
+            >
+              15 incidents per page
+            </p>
           </div>
+
+          <button
+            type="button"
+            disabled={
+              currentPage
+              >= totalPages
+            }
+            onClick={() => {
+              setCurrentPage(
+                (current) =>
+                  Math.min(
+                    totalPages,
+                    current + 1,
+                  ),
+              );
+
+              window.scrollTo({
+                top: 0,
+                behavior: "smooth",
+              });
+            }}
+            className="
+              rounded-lg
+              border border-slate-800
+              bg-[#0b111c]
+              px-3.5 py-2
+              text-xs
+              text-slate-400
+              transition-all
+              hover:-translate-y-0.5
+              hover:border-cyan-900/60
+              hover:text-cyan-300
+              disabled:cursor-not-allowed
+              disabled:opacity-35
+              disabled:hover:translate-y-0
+              disabled:hover:border-slate-800
+              disabled:hover:text-slate-400
+            "
+          >
+            Next →
+          </button>
         </section>
+
 
         <footer
           className="
-            mt-6 border-t
+            mt-6
+            border-t
             border-slate-800/70
-            py-5 text-[11px]
+            py-5
+            text-[11px]
             text-slate-600
           "
         >
-          Incident classifications are
-          inferred from observable security
-          behavior. Simulator ground-truth
-          labels are excluded from the
-          operational workspace.
+          Incident classifications are inferred
+          from observable security behavior.
+          Simulator ground-truth labels are
+          excluded from the operational workspace.
         </footer>
       </div>
     </main>
   );
 }
+
 
 export default IncidentsPage;

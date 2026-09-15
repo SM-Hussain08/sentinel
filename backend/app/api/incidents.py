@@ -290,6 +290,129 @@ def get_incident_summary(
 
 
 @router.get(
+    "/by-event/{event_id}",
+    response_model=list[
+        IncidentListItem
+    ],
+)
+def get_incidents_for_event(
+    event_id: str,
+
+    db: Session = Depends(
+        get_db
+    ),
+) -> list[
+    IncidentListItem
+]:
+    """
+    Return every correlated incident that contains
+    the requested security event.
+
+    This is a reverse lookup across:
+
+        Event
+        -> IncidentEvent
+        -> Incident
+
+    The endpoint exposes operational correlation
+    relationships only. Simulator ground-truth
+    labels are not consulted.
+    """
+
+    rows = db.execute(
+        select(
+            Incident,
+            Employee,
+        )
+        .join(
+            IncidentEvent,
+            IncidentEvent.incident_uuid
+            == Incident.id,
+        )
+        .join(
+            Event,
+            IncidentEvent.event_uuid
+            == Event.id,
+        )
+        .outerjoin(
+            Employee,
+            Incident.primary_employee_id
+            == Employee.id,
+        )
+        .where(
+            Event.event_id
+            == event_id,
+        )
+        .order_by(
+            desc(
+                Incident.first_seen
+            )
+        )
+    ).all()
+
+
+    return [
+        IncidentListItem(
+            incident_id=(
+                incident.incident_id
+            ),
+
+            title=(
+                incident.title
+            ),
+
+            incident_type=(
+                incident.incident_type
+            ),
+
+            severity=(
+                incident.severity
+            ),
+
+            status=(
+                incident.status
+            ),
+
+            primary_employee_user_id=(
+                employee.user_id
+                if employee
+                else None
+            ),
+
+            first_seen=(
+                incident.first_seen
+            ),
+
+            last_seen=(
+                incident.last_seen
+            ),
+
+            event_count=(
+                incident.event_count
+            ),
+
+            anomaly_count=(
+                incident.anomaly_count
+            ),
+
+            max_anomaly_score=(
+                incident.max_anomaly_score
+            ),
+
+            summary=(
+                incident.summary
+            ),
+        )
+
+        for (
+            incident,
+            employee,
+        )
+        in rows
+    ]
+
+
+@router.get(
     "/{incident_id}",
     response_model=IncidentDetail,
 )

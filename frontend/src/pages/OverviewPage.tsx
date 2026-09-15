@@ -1,16 +1,21 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 import {
+  useNavigate,
+} from "react-router-dom";
+
+import {
   getEmployees,
+  getEvaluationSummary,
   getIncidents,
   getIncidentSummary,
   getMLModelInfo,
   getMLSummary,
-  getEvaluationSummary,
 } from "../services/api";
 
 import type {
@@ -22,314 +27,272 @@ import type {
   MLSummary,
 } from "../types/api";
 
+import OverviewIncidentQueue from "../components/overview/OverviewIncidentQueue";
+import OverviewMetricCard from "../components/overview/OverviewMetricCard";
+import OverviewRefreshControls from "../components/overview/OverviewRefreshControls";
 
-const SEVERITY_STYLES: Record<
-  IncidentSeverity,
-  {
-    badge: string;
-    dot: string;
-    bar: string;
-  }
-> = {
-  CRITICAL: {
-    badge:
-      "border-red-800/70 bg-red-950/45 text-red-300",
-
-    dot:
-      "bg-red-400 shadow-[0_0_10px_rgba(248,113,113,0.6)]",
-
-    bar:
-      "bg-red-500",
-  },
-
-  HIGH: {
-    badge:
-      "border-orange-800/70 bg-orange-950/35 text-orange-300",
-
-    dot:
-      "bg-orange-400",
-
-    bar:
-      "bg-orange-500",
-  },
-
-  MEDIUM: {
-    badge:
-      "border-amber-800/60 bg-amber-950/30 text-amber-300",
-
-    dot:
-      "bg-amber-400",
-
-    bar:
-      "bg-amber-500",
-  },
-};
+import {
+  OVERVIEW_SEVERITY_STYLES,
+  formatOverviewNumber,
+  formatOverviewPercent,
+} from "../components/overview/overviewStyles";
 
 
-function formatNumber(
-  value: number,
-): string {
-  return new Intl.NumberFormat(
-    "en-US",
-  ).format(value);
-}
+const AUTO_REFRESH_INTERVAL_MS =
+  10_000;
+
+const INCIDENT_FETCH_LIMIT =
+  50;
+
+const OVERVIEW_INCIDENT_LIMIT =
+  5;
 
 
-function formatPercent(
-  value: number,
-  decimals = 1,
-): string {
-  return `${(
-    value * 100
-  ).toFixed(decimals)}%`;
-}
+const SEVERITY_PRIORITY:
+  Record<
+    IncidentSeverity,
+    number
+  > = {
+    CRITICAL:
+      3,
+
+    HIGH:
+      2,
+
+    MEDIUM:
+      1,
+  };
 
 
-function formatIncidentType(
-  value: string,
-): string {
-  return value
-    .split("_")
-    .map(
-      (word) =>
-        word.charAt(0)
-        + word
-          .slice(1)
-          .toLowerCase(),
+const STATUS_PRIORITY:
+  Record<
+    string,
+    number
+  > = {
+    OPEN:
+      4,
+
+    INVESTIGATING:
+      3,
+
+    RESOLVED:
+      2,
+
+    CLOSED:
+      1,
+  };
+
+
+function selectPriorityIncidents(
+  incidents:
+    IncidentListItem[],
+): IncidentListItem[] {
+  return [
+    ...incidents,
+  ]
+    .sort(
+      (
+        incidentA,
+        incidentB,
+      ) => {
+        /*
+         * 1. Highest severity first.
+         */
+        const severityDifference =
+          SEVERITY_PRIORITY[
+            incidentB.severity
+          ]
+          - SEVERITY_PRIORITY[
+              incidentA.severity
+            ];
+
+        if (
+          severityDifference
+          !== 0
+        ) {
+          return severityDifference;
+        }
+
+
+        /*
+         * 2. Active investigations ahead
+         *    of resolved / closed cases.
+         */
+        const statusDifference =
+          (
+            STATUS_PRIORITY[
+              incidentB.status
+            ]
+            ?? 0
+          )
+          - (
+              STATUS_PRIORITY[
+                incidentA.status
+              ]
+              ?? 0
+            );
+
+        if (
+          statusDifference
+          !== 0
+        ) {
+          return statusDifference;
+        }
+
+
+        /*
+         * 3. Most recently observed
+         *    incident first.
+         */
+        return (
+          new Date(
+            incidentB.first_seen,
+          ).getTime()
+          - new Date(
+              incidentA.first_seen,
+            ).getTime()
+        );
+      },
     )
-    .join(" ");
-}
-
-
-function formatTimestamp(
-  timestamp: string,
-): string {
-  return new Date(
-    timestamp,
-  ).toLocaleString(
-    undefined,
-    {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    },
-  );
-}
-
-
-function SeverityBadge({
-  severity,
-}: {
-  severity: IncidentSeverity;
-}) {
-  return (
-    <span
-      className={[
-        "inline-flex items-center",
-        "rounded-full border",
-        "px-2.5 py-1",
-        "text-[10px] font-semibold",
-        "tracking-[0.12em]",
-        SEVERITY_STYLES[
-          severity
-        ].badge,
-      ].join(" ")}
-    >
-      {severity}
-    </span>
-  );
-}
-
-
-function MetricCard({
-  eyebrow,
-  value,
-  label,
-  helper,
-  tone = "default",
-}: {
-  eyebrow: string;
-  value: string;
-  label: string;
-  helper: string;
-
-  tone?:
-    | "default"
-    | "critical"
-    | "cyan";
-}) {
-  return (
-    <div
-      className={[
-        "group relative",
-        "overflow-hidden",
-        "rounded-2xl border",
-        "border-slate-700/55",
-        "bg-[#101826]/90",
-        "p-5",
-        "shadow-[0_12px_35px_rgba(0,0,0,0.12)]",
-        "transition-all duration-300",
-        "hover:-translate-y-1",
-        "hover:border-slate-600/70",
-        "hover:bg-[#121c2b]",
-        "hover:shadow-[0_18px_45px_rgba(0,0,0,0.2)]",
-      ].join(" ")}
-    >
-      <div
-        className={[
-          "absolute inset-x-0 top-0",
-          "h-px",
-          tone === "critical"
-            ? "bg-gradient-to-r from-transparent via-red-500 to-transparent"
-            : tone === "cyan"
-              ? "bg-gradient-to-r from-transparent via-cyan-400 to-transparent"
-              : "bg-gradient-to-r from-transparent via-slate-500/60 to-transparent",
-        ].join(" ")}
-      />
-
-      <p
-        className="
-          text-[10px]
-          font-medium uppercase
-          tracking-[0.17em]
-          text-slate-500
-        "
-      >
-        {eyebrow}
-      </p>
-
-      <div
-        className="
-          mt-4 flex
-          items-end justify-between
-          gap-4
-        "
-      >
-        <div>
-          <p
-            className={[
-              "text-3xl",
-              "font-semibold",
-              "tracking-tight",
-              tone === "critical"
-                ? "text-red-300"
-                : "text-white",
-            ].join(" ")}
-          >
-            {value}
-          </p>
-
-          <p
-            className="
-              mt-1 text-sm
-              font-medium
-              text-slate-300
-            "
-          >
-            {label}
-          </p>
-        </div>
-
-        <div
-          className={[
-            "h-9 w-9",
-            "rounded-xl border",
-            "transition-all duration-300",
-            "group-hover:scale-105",
-            tone === "critical"
-              ? (
-                "border-red-900/60 "
-                + "bg-red-950/30"
-              )
-              : tone === "cyan"
-                ? (
-                  "border-cyan-900/60 "
-                  + "bg-cyan-950/30"
-                )
-                : (
-                  "border-slate-700/70 "
-                  + "bg-slate-900/70"
-                ),
-          ].join(" ")}
-        />
-      </div>
-
-      <p
-        className="
-          mt-4 text-xs
-          leading-5
-          text-slate-500
-        "
-      >
-        {helper}
-      </p>
-    </div>
-  );
+    .slice(
+      0,
+      OVERVIEW_INCIDENT_LIMIT,
+    );
 }
 
 
 function OverviewPage() {
+  const navigate =
+    useNavigate();
+
+
   const [
     employeeCount,
     setEmployeeCount,
-  ] = useState(0);
+  ] = useState(
+    0,
+  );
 
   const [
     incidentSummary,
     setIncidentSummary,
   ] = useState<
     IncidentSummary | null
-  >(null);
+  >(
+    null,
+  );
 
   const [
     incidents,
     setIncidents,
   ] = useState<
     IncidentListItem[]
-  >([]);
+  >(
+    [],
+  );
 
   const [
     mlSummary,
     setMLSummary,
   ] = useState<
     MLSummary | null
-  >(null);
+  >(
+    null,
+  );
 
   const [
     model,
     setModel,
   ] = useState<
     MLModelInfo | null
-  >(null);
+  >(
+    null,
+  );
 
   const [
     evaluation,
     setEvaluation,
   ] = useState<
     EvaluationSummary | null
-  >(null);
+  >(
+    null,
+  );
+
 
   const [
     isLoading,
     setIsLoading,
-  ] = useState(true);
+  ] = useState(
+    true,
+  );
 
   const [
     isRefreshing,
     setIsRefreshing,
-  ] = useState(false);
+  ] = useState(
+    false,
+  );
+
+  const [
+    isBackgroundRefreshing,
+    setIsBackgroundRefreshing,
+  ] = useState(
+    false,
+  );
+
 
   const [
     error,
     setError,
   ] = useState<
     string | null
-  >(null);
+  >(
+    null,
+  );
+
+  const [
+    refreshWarning,
+    setRefreshWarning,
+  ] = useState<
+    string | null
+  >(
+    null,
+  );
 
 
+  const [
+    lastRefreshedAt,
+    setLastRefreshedAt,
+  ] = useState<
+    number | null
+  >(
+    null,
+  );
+
+  const [
+    refreshAgeSeconds,
+    setRefreshAgeSeconds,
+  ] = useState(
+    0,
+  );
+
+
+  const refreshInFlightRef =
+    useRef(
+      false,
+    );
+
+
+  /*
+   * Initial intelligence load.
+   *
+   * This is the only time Overview uses
+   * the full-page loading state.
+   */
   useEffect(() => {
-    let cancelled = false;
+    let cancelled =
+      false;
+
 
     async function loadInitialData() {
       try {
@@ -342,16 +305,27 @@ function OverviewPage() {
           evaluationData,
         ] = await Promise.all([
           getEmployees(),
+
           getIncidentSummary(),
-          getIncidents(8),
+
+          getIncidents(
+            INCIDENT_FETCH_LIMIT,
+          ),
+
           getMLSummary(),
+
           getMLModelInfo(),
+
           getEvaluationSummary(),
         ]);
 
-        if (cancelled) {
+
+        if (
+          cancelled
+        ) {
           return;
         }
+
 
         setEmployeeCount(
           employees.length,
@@ -377,17 +351,34 @@ function OverviewPage() {
           evaluationData,
         );
 
+
+        setLastRefreshedAt(
+          Date.now(),
+        );
+
+        setRefreshAgeSeconds(
+          0,
+        );
+
         setError(
           null,
         );
+
+        setRefreshWarning(
+          null,
+        );
       } catch {
-        if (!cancelled) {
+        if (
+          !cancelled
+        ) {
           setError(
             "SENTINEL could not load the current security posture. Confirm that PostgreSQL and the FastAPI backend are running.",
           );
         }
       } finally {
-        if (!cancelled) {
+        if (
+          !cancelled
+        ) {
           setIsLoading(
             false,
           );
@@ -395,18 +386,207 @@ function OverviewPage() {
       }
     }
 
+
     void loadInitialData();
 
+
     return () => {
-      cancelled = true;
+      cancelled =
+        true;
     };
   }, []);
 
 
+  /*
+   * Refresh-age display timer.
+   *
+   * This changes the visible label only.
+   * It does not make API requests.
+   */
+  useEffect(() => {
+    const intervalId =
+      window.setInterval(
+        () => {
+          setRefreshAgeSeconds(
+            (current) =>
+              current + 1,
+          );
+        },
+        1000,
+      );
+
+
+    return () => {
+      window.clearInterval(
+        intervalId,
+      );
+    };
+  }, []);
+
+
+  /*
+   * Silent 10-second intelligence refresh.
+   *
+   * Existing dashboard data remains visible
+   * throughout the request.
+   */
+  useEffect(() => {
+    let cancelled =
+      false;
+
+
+    async function refreshLatestData() {
+      if (
+        refreshInFlightRef.current
+      ) {
+        return;
+      }
+
+
+      refreshInFlightRef.current =
+        true;
+
+      setIsBackgroundRefreshing(
+        true,
+      );
+
+
+      try {
+        const [
+          employees,
+          incidentData,
+          incidentList,
+          machineLearningSummary,
+          modelInfo,
+          evaluationData,
+        ] = await Promise.all([
+          getEmployees(),
+
+          getIncidentSummary(),
+
+          getIncidents(
+            INCIDENT_FETCH_LIMIT,
+          ),
+
+          getMLSummary(),
+
+          getMLModelInfo(),
+
+          getEvaluationSummary(),
+        ]);
+
+
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+
+        setEmployeeCount(
+          employees.length,
+        );
+
+        setIncidentSummary(
+          incidentData,
+        );
+
+        setIncidents(
+          incidentList,
+        );
+
+        setMLSummary(
+          machineLearningSummary,
+        );
+
+        setModel(
+          modelInfo,
+        );
+
+        setEvaluation(
+          evaluationData,
+        );
+
+
+        setLastRefreshedAt(
+          Date.now(),
+        );
+
+        setRefreshAgeSeconds(
+          0,
+        );
+
+        setRefreshWarning(
+          null,
+        );
+
+        setError(
+          null,
+        );
+      } catch {
+        if (
+          !cancelled
+        ) {
+          setRefreshWarning(
+            "Automatic refresh could not retrieve the latest security intelligence. Existing dashboard data remains visible.",
+          );
+        }
+      } finally {
+        refreshInFlightRef.current =
+          false;
+
+        if (
+          !cancelled
+        ) {
+          setIsBackgroundRefreshing(
+            false,
+          );
+        }
+      }
+    }
+
+
+    const intervalId =
+      window.setInterval(
+        () => {
+          void refreshLatestData();
+        },
+        AUTO_REFRESH_INTERVAL_MS,
+      );
+
+
+    return () => {
+      cancelled =
+        true;
+
+      window.clearInterval(
+        intervalId,
+      );
+    };
+  }, []);
+
+
+  /*
+   * Explicit analyst-requested refresh.
+   *
+   * Uses the same complete intelligence
+   * dataset as the silent refresh.
+   */
   async function refreshOverview() {
+    if (
+      refreshInFlightRef.current
+    ) {
+      return;
+    }
+
+
+    refreshInFlightRef.current =
+      true;
+
     setIsRefreshing(
       true,
     );
+
 
     try {
       const [
@@ -418,12 +598,20 @@ function OverviewPage() {
         evaluationData,
       ] = await Promise.all([
         getEmployees(),
+
         getIncidentSummary(),
-        getIncidents(8),
+
+        getIncidents(
+          INCIDENT_FETCH_LIMIT,
+        ),
+
         getMLSummary(),
+
         getMLModelInfo(),
+
         getEvaluationSummary(),
       ]);
+
 
       setEmployeeCount(
         employees.length,
@@ -449,14 +637,30 @@ function OverviewPage() {
         evaluationData,
       );
 
+
+      setLastRefreshedAt(
+        Date.now(),
+      );
+
+      setRefreshAgeSeconds(
+        0,
+      );
+
+      setRefreshWarning(
+        null,
+      );
+
       setError(
         null,
       );
     } catch {
-      setError(
-        "SENTINEL could not refresh the current intelligence feed.",
+      setRefreshWarning(
+        "SENTINEL could not refresh the current intelligence feed. Existing dashboard data remains visible.",
       );
     } finally {
+      refreshInFlightRef.current =
+        false;
+
       setIsRefreshing(
         false,
       );
@@ -464,65 +668,126 @@ function OverviewPage() {
   }
 
 
-  const severityRows = useMemo<
-    {
-      severity: IncidentSeverity;
-      count: number;
-      percentage: number;
-    }[]
-  >(() => {
-    if (!incidentSummary) {
-      return [];
-    }
-
-    const total =
-      incidentSummary.total_incidents || 1;
-
-    const rows: {
-      severity: IncidentSeverity;
-      count: number;
-    }[] = [
+  /*
+   * Severity distribution used by the
+   * existing Incident Severity panel.
+   */
+  const severityRows =
+    useMemo<
       {
-        severity: "CRITICAL",
-        count:
-          incidentSummary.critical_incidents,
-      },
-      {
-        severity: "HIGH",
-        count:
-          incidentSummary.high_incidents,
-      },
-      {
-        severity: "MEDIUM",
-        count:
-          incidentSummary.medium_incidents,
-      },
-    ];
+        severity:
+          IncidentSeverity;
 
-    return rows.map(
-      (row) => ({
-        ...row,
+        count:
+          number;
+
         percentage:
-          row.count / total,
-      }),
+          number;
+      }[]
+    >(
+      () => {
+        if (
+          !incidentSummary
+        ) {
+          return [];
+        }
+
+
+        const total =
+          incidentSummary
+            .total_incidents
+          || 1;
+
+
+        const rows:
+          {
+            severity:
+              IncidentSeverity;
+
+            count:
+              number;
+          }[] = [
+            {
+              severity:
+                "CRITICAL",
+
+              count:
+                incidentSummary
+                  .critical_incidents,
+            },
+
+            {
+              severity:
+                "HIGH",
+
+              count:
+                incidentSummary
+                  .high_incidents,
+            },
+
+            {
+              severity:
+                "MEDIUM",
+
+              count:
+                incidentSummary
+                  .medium_incidents,
+            },
+          ];
+
+
+        return rows.map(
+          (
+            row,
+          ) => ({
+            ...row,
+
+            percentage:
+              row.count
+              / total,
+          }),
+        );
+      },
+      [
+        incidentSummary,
+      ],
     );
-  }, [
-    incidentSummary,
-  ]);
 
 
-  if (isLoading) {
+  /*
+   * Overview shows only the highest-value
+   * operational incidents, while /incidents
+   * remains the complete investigation queue.
+   */
+  const priorityIncidents =
+    useMemo(
+      () =>
+        selectPriorityIncidents(
+          incidents,
+        ),
+      [
+        incidents,
+      ],
+    );
+
+
+  if (
+    isLoading
+  ) {
     return (
       <main
         className="
-          flex min-h-screen
-          items-center justify-center
+          flex
+          min-h-screen
+          items-center
+          justify-center
           px-6
         "
       >
         <div
           className="
-            flex flex-col
+            flex
+            flex-col
             items-center
             gap-4
           "
@@ -575,7 +840,8 @@ function OverviewPage() {
             ================================================= */}
         <header
           className="
-            flex flex-col
+            flex
+            flex-col
             gap-5
             lg:flex-row
             lg:items-end
@@ -585,7 +851,8 @@ function OverviewPage() {
           <div>
             <div
               className="
-                flex items-center
+                flex
+                items-center
                 gap-2.5
               "
             >
@@ -601,7 +868,8 @@ function OverviewPage() {
               <p
                 className="
                   text-[10px]
-                  font-semibold uppercase
+                  font-semibold
+                  uppercase
                   tracking-[0.19em]
                   text-cyan-400
                 "
@@ -610,9 +878,11 @@ function OverviewPage() {
               </p>
             </div>
 
+
             <h1
               className="
-                mt-3 text-3xl
+                mt-3
+                text-3xl
                 font-semibold
                 tracking-tight
                 text-white
@@ -622,10 +892,13 @@ function OverviewPage() {
               Security Operations Overview
             </h1>
 
+
             <p
               className="
-                mt-3 max-w-3xl
-                text-sm leading-6
+                mt-3
+                max-w-3xl
+                text-sm
+                leading-6
                 text-slate-500
               "
             >
@@ -638,88 +911,33 @@ function OverviewPage() {
           </div>
 
 
-          <div
-            className="
-              flex flex-wrap
-              items-center gap-3
-            "
-          >
-            <div
-              className="
-                rounded-xl
-                border border-emerald-900/40
-                bg-emerald-950/15
-                px-4 py-2.5
-              "
-            >
-              <div
-                className="
-                  flex items-center
-                  gap-2
-                "
-              >
-                <span
-                  className="
-                    h-2 w-2
-                    rounded-full
-                    bg-emerald-400
-                    shadow-[0_0_10px_rgba(52,211,153,0.7)]
-                  "
-                />
-
-                <span
-                  className="
-                    text-[11px]
-                    font-semibold
-                    tracking-[0.1em]
-                    text-emerald-300
-                  "
-                >
-                  SYSTEM OPERATIONAL
-                </span>
-              </div>
-            </div>
-
-
-            <button
-              type="button"
-              disabled={
-                isRefreshing
-              }
-              onClick={() => {
-                void refreshOverview();
-              }}
-              className="
-                rounded-xl
-                border border-slate-700/70
-                bg-[#121a28]
-                px-4 py-2.5
-                text-xs font-medium
-                text-slate-300
-                shadow-lg
-                transition-all
-                duration-200
-                hover:-translate-y-0.5
-                hover:border-cyan-800/70
-                hover:bg-cyan-950/20
-                hover:text-cyan-300
-                disabled:cursor-wait
-                disabled:opacity-60
-              "
-            >
-              {isRefreshing
-                ? "Refreshing..."
-                : "Refresh Intelligence"}
-            </button>
-          </div>
+          <OverviewRefreshControls
+            isRefreshing={
+              isRefreshing
+            }
+            isBackgroundRefreshing={
+              isBackgroundRefreshing
+            }
+            lastRefreshedAt={
+              lastRefreshedAt
+            }
+            refreshAgeSeconds={
+              refreshAgeSeconds
+            }
+            onRefresh={() => {
+              void refreshOverview();
+            }}
+          />
         </header>
 
 
         {error && (
           <div
             className="
-              mt-6 rounded-xl
-              border border-red-900/60
+              mt-6
+              rounded-xl
+              border
+              border-red-900/60
               bg-red-950/25
               px-4 py-3
               text-sm
@@ -731,31 +949,54 @@ function OverviewPage() {
         )}
 
 
+        {refreshWarning && (
+          <div
+            className="
+              mt-4
+              rounded-xl
+              border
+              border-amber-900/50
+              bg-amber-950/10
+              px-4 py-3
+              text-xs
+              text-amber-300
+            "
+          >
+            {refreshWarning}
+          </div>
+        )}
+
+
         {/* =================================================
             Primary Metrics
             ================================================= */}
         <section
           className="
-            mt-7 grid gap-4
+            mt-7
+            grid
+            gap-4
             sm:grid-cols-2
             xl:grid-cols-4
           "
         >
-          <MetricCard
+          <OverviewMetricCard
             eyebrow="Enterprise"
-            value={formatNumber(
-              employeeCount,
-            )}
+            value={
+              formatOverviewNumber(
+                employeeCount,
+              )
+            }
             label="Monitored Identities"
             helper="Active synthetic enterprise identities currently represented in SENTINEL."
             tone="cyan"
           />
 
-          <MetricCard
+
+          <OverviewMetricCard
             eyebrow="Telemetry"
             value={
               mlSummary
-                ? formatNumber(
+                ? formatOverviewNumber(
                     mlSummary
                       .events_scored,
                   )
@@ -765,11 +1006,12 @@ function OverviewPage() {
             helper="Security events processed through the selected behavioral anomaly detector."
           />
 
-          <MetricCard
+
+          <OverviewMetricCard
             eyebrow="Investigations"
             value={
               incidentSummary
-                ? formatNumber(
+                ? formatOverviewNumber(
                     incidentSummary
                       .open_incidents,
                   )
@@ -780,11 +1022,12 @@ function OverviewPage() {
             tone="cyan"
           />
 
-          <MetricCard
+
+          <OverviewMetricCard
             eyebrow="Priority"
             value={
               incidentSummary
-                ? formatNumber(
+                ? formatOverviewNumber(
                     incidentSummary
                       .critical_incidents,
                   )
@@ -802,7 +1045,9 @@ function OverviewPage() {
             ================================================= */}
         <section
           className="
-            mt-4 grid gap-4
+            mt-4
+            grid
+            gap-4
             xl:grid-cols-[0.9fr_1.1fr]
           "
         >
@@ -810,18 +1055,21 @@ function OverviewPage() {
           <article
             className="
               rounded-2xl
-              border border-slate-700/55
+              border
+              border-slate-700/55
               bg-[#101826]/90
               p-5
               shadow-[0_12px_35px_rgba(0,0,0,0.12)]
-              transition-all duration-300
+              transition-all
+              duration-300
               hover:border-slate-600/70
               hover:bg-[#121c2b]
             "
           >
             <div
               className="
-                flex items-start
+                flex
+                items-start
                 justify-between
                 gap-4
               "
@@ -840,7 +1088,8 @@ function OverviewPage() {
 
                 <h2
                   className="
-                    mt-1.5 text-lg
+                    mt-1.5
+                    text-lg
                     font-semibold
                     text-white
                   "
@@ -848,6 +1097,7 @@ function OverviewPage() {
                   Incident Severity
                 </h2>
               </div>
+
 
               <div
                 className="
@@ -867,13 +1117,14 @@ function OverviewPage() {
 
                 <p
                   className="
-                    mt-1 text-xl
+                    mt-1
+                    text-xl
                     font-semibold
                     text-slate-200
                   "
                 >
                   {incidentSummary
-                    ? formatNumber(
+                    ? formatOverviewNumber(
                         incidentSummary
                           .total_incidents,
                       )
@@ -885,7 +1136,8 @@ function OverviewPage() {
 
             <div
               className="
-                mt-6 space-y-5
+                mt-6
+                space-y-5
               "
             >
               {severityRows.map(
@@ -904,14 +1156,16 @@ function OverviewPage() {
                   >
                     <div
                       className="
-                        flex items-center
+                        flex
+                        items-center
                         justify-between
                         gap-4
                       "
                     >
                       <div
                         className="
-                          flex items-center
+                          flex
+                          items-center
                           gap-2.5
                         "
                       >
@@ -919,10 +1173,13 @@ function OverviewPage() {
                           className={[
                             "h-2 w-2",
                             "rounded-full",
-                            SEVERITY_STYLES[
+
+                            OVERVIEW_SEVERITY_STYLES[
                               severity
                             ].dot,
-                          ].join(" ")}
+                          ].join(
+                            " ",
+                          )}
                         />
 
                         <span
@@ -935,6 +1192,7 @@ function OverviewPage() {
                           {severity}
                         </span>
                       </div>
+
 
                       <div
                         className="
@@ -953,15 +1211,17 @@ function OverviewPage() {
 
                         {" · "}
 
-                        {formatPercent(
+                        {formatOverviewPercent(
                           percentage,
                         )}
                       </div>
                     </div>
 
+
                     <div
                       className="
-                        mt-2.5 h-1.5
+                        mt-2.5
+                        h-1.5
                         overflow-hidden
                         rounded-full
                         bg-slate-800
@@ -974,10 +1234,13 @@ function OverviewPage() {
                           "transition-all",
                           "duration-500",
                           "group-hover:brightness-125",
-                          SEVERITY_STYLES[
+
+                          OVERVIEW_SEVERITY_STYLES[
                             severity
                           ].bar,
-                        ].join(" ")}
+                        ].join(
+                          " ",
+                        )}
                         style={{
                           width:
                             `${percentage * 100}%`,
@@ -992,8 +1255,10 @@ function OverviewPage() {
 
             <div
               className="
-                mt-6 grid
-                grid-cols-2 gap-3
+                mt-6
+                grid
+                grid-cols-2
+                gap-3
                 border-t
                 border-slate-800
                 pt-5
@@ -1002,7 +1267,8 @@ function OverviewPage() {
               <div
                 className="
                   rounded-xl
-                  border border-slate-800
+                  border
+                  border-slate-800
                   bg-[#0b111c]
                   p-4
                 "
@@ -1020,13 +1286,14 @@ function OverviewPage() {
 
                 <p
                   className="
-                    mt-2 text-xl
+                    mt-2
+                    text-xl
                     font-semibold
                     text-slate-200
                   "
                 >
                   {incidentSummary
-                    ? formatNumber(
+                    ? formatOverviewNumber(
                         incidentSummary
                           .total_correlated_events,
                       )
@@ -1034,10 +1301,12 @@ function OverviewPage() {
                 </p>
               </div>
 
+
               <div
                 className="
                   rounded-xl
-                  border border-slate-800
+                  border
+                  border-slate-800
                   bg-[#0b111c]
                   p-4
                 "
@@ -1055,13 +1324,14 @@ function OverviewPage() {
 
                 <p
                   className="
-                    mt-2 text-xl
+                    mt-2
+                    text-xl
                     font-semibold
                     text-emerald-300
                   "
                 >
                   {evaluation
-                    ? formatPercent(
+                    ? formatOverviewPercent(
                         evaluation
                           .incident_evaluation
                           .recall,
@@ -1077,13 +1347,16 @@ function OverviewPage() {
           {/* Intelligence Pipeline */}
           <article
             className="
-              relative overflow-hidden
+              relative
+              overflow-hidden
               rounded-2xl
-              border border-slate-700/55
+              border
+              border-slate-700/55
               bg-[#101826]/90
               p-5
               shadow-[0_12px_35px_rgba(0,0,0,0.12)]
-              transition-all duration-300
+              transition-all
+              duration-300
               hover:border-cyan-900/45
               hover:bg-[#121c2b]
             "
@@ -1100,6 +1373,7 @@ function OverviewPage() {
                 blur-[90px]
               "
             />
+
 
             <div
               className="
@@ -1119,7 +1393,8 @@ function OverviewPage() {
 
               <h2
                 className="
-                  mt-1.5 text-lg
+                  mt-1.5
+                  text-lg
                   font-semibold
                   text-white
                 "
@@ -1129,7 +1404,8 @@ function OverviewPage() {
 
               <p
                 className="
-                  mt-2 max-w-2xl
+                  mt-2
+                  max-w-2xl
                   text-xs
                   leading-5
                   text-slate-500
@@ -1146,18 +1422,22 @@ function OverviewPage() {
 
               <div
                 className="
-                  mt-6 grid
+                  mt-6
+                  grid
                   gap-3
                   md:grid-cols-4
                 "
               >
                 <div
                   className="
-                    group rounded-xl
-                    border border-slate-800
+                    group
+                    rounded-xl
+                    border
+                    border-slate-800
                     bg-[#0b111c]
                     p-4
-                    transition-all duration-200
+                    transition-all
+                    duration-200
                     hover:-translate-y-1
                     hover:border-cyan-900/50
                   "
@@ -1175,13 +1455,14 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-2 text-xl
+                      mt-2
+                      text-xl
                       font-semibold
                       text-white
                     "
                   >
                     {mlSummary
-                      ? formatNumber(
+                      ? formatOverviewNumber(
                           mlSummary
                             .events_scored,
                         )
@@ -1190,7 +1471,8 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-1 text-xs
+                      mt-1
+                      text-xs
                       text-slate-500
                     "
                   >
@@ -1201,11 +1483,14 @@ function OverviewPage() {
 
                 <div
                   className="
-                    group rounded-xl
-                    border border-slate-800
+                    group
+                    rounded-xl
+                    border
+                    border-slate-800
                     bg-[#0b111c]
                     p-4
-                    transition-all duration-200
+                    transition-all
+                    duration-200
                     hover:-translate-y-1
                     hover:border-red-900/50
                   "
@@ -1223,13 +1508,14 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-2 text-xl
+                      mt-2
+                      text-xl
                       font-semibold
                       text-red-300
                     "
                   >
                     {mlSummary
-                      ? formatNumber(
+                      ? formatOverviewNumber(
                           mlSummary
                             .alert_count,
                         )
@@ -1238,7 +1524,8 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-1 text-xs
+                      mt-1
+                      text-xs
                       text-slate-500
                     "
                   >
@@ -1249,11 +1536,14 @@ function OverviewPage() {
 
                 <div
                   className="
-                    group rounded-xl
-                    border border-slate-800
+                    group
+                    rounded-xl
+                    border
+                    border-slate-800
                     bg-[#0b111c]
                     p-4
-                    transition-all duration-200
+                    transition-all
+                    duration-200
                     hover:-translate-y-1
                     hover:border-orange-900/50
                   "
@@ -1271,13 +1561,14 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-2 text-xl
+                      mt-2
+                      text-xl
                       font-semibold
                       text-white
                     "
                   >
                     {incidentSummary
-                      ? formatNumber(
+                      ? formatOverviewNumber(
                           incidentSummary
                             .total_incidents,
                         )
@@ -1286,7 +1577,8 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-1 text-xs
+                      mt-1
+                      text-xs
                       text-slate-500
                     "
                   >
@@ -1297,11 +1589,14 @@ function OverviewPage() {
 
                 <div
                   className="
-                    group rounded-xl
-                    border border-slate-800
+                    group
+                    rounded-xl
+                    border
+                    border-slate-800
                     bg-[#0b111c]
                     p-4
-                    transition-all duration-200
+                    transition-all
+                    duration-200
                     hover:-translate-y-1
                     hover:border-emerald-900/50
                   "
@@ -1319,13 +1614,14 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-2 text-xl
+                      mt-2
+                      text-xl
                       font-semibold
                       text-emerald-300
                     "
                   >
                     {incidentSummary
-                      ? formatNumber(
+                      ? formatOverviewNumber(
                           incidentSummary
                             .total_incidents,
                         )
@@ -1334,7 +1630,8 @@ function OverviewPage() {
 
                   <p
                     className="
-                      mt-1 text-xs
+                      mt-1
+                      text-xs
                       text-slate-500
                     "
                   >
@@ -1347,7 +1644,8 @@ function OverviewPage() {
               {/* Pipeline connector */}
               <div
                 className="
-                  mt-5 hidden
+                  mt-5
+                  hidden
                   items-center
                   md:flex
                 "
@@ -1363,21 +1661,26 @@ function OverviewPage() {
                     index,
                   ) => (
                     <div
-                      key={step}
+                      key={
+                        step
+                      }
                       className="
-                        flex flex-1
+                        flex
+                        flex-1
                         items-center
                       "
                     >
                       <div
                         className="
-                          flex items-center
+                          flex
+                          items-center
                           gap-2
                         "
                       >
                         <span
                           className="
-                            flex h-6 w-6
+                            flex
+                            h-6 w-6
                             items-center
                             justify-center
                             rounded-full
@@ -1402,10 +1705,13 @@ function OverviewPage() {
                         </span>
                       </div>
 
-                      {index < 3 && (
+
+                      {index
+                        < 3 && (
                         <div
                           className="
-                            mx-3 h-px
+                            mx-3
+                            h-px
                             flex-1
                             bg-gradient-to-r
                             from-cyan-900/50
@@ -1427,17 +1733,21 @@ function OverviewPage() {
             ================================================= */}
         <section
           className="
-            mt-4 grid gap-4
+            mt-4
+            grid
+            gap-4
             lg:grid-cols-3
           "
         >
           <div
             className="
               rounded-2xl
-              border border-slate-700/55
+              border
+              border-slate-700/55
               bg-[#101826]/90
               p-5
-              transition-all duration-300
+              transition-all
+              duration-300
               hover:-translate-y-0.5
               hover:border-cyan-900/50
             "
@@ -1453,9 +1763,11 @@ function OverviewPage() {
               ML Detection
             </p>
 
+
             <div
               className="
-                mt-3 flex
+                mt-3
+                flex
                 items-baseline
                 justify-between
                 gap-3
@@ -1469,7 +1781,7 @@ function OverviewPage() {
                 "
               >
                 {model
-                  ? formatPercent(
+                  ? formatOverviewPercent(
                       model.recall,
                     )
                   : "—"}
@@ -1487,9 +1799,11 @@ function OverviewPage() {
               </span>
             </div>
 
+
             <p
               className="
-                mt-3 text-xs
+                mt-3
+                text-xs
                 leading-5
                 text-slate-500
               "
@@ -1504,10 +1818,12 @@ function OverviewPage() {
           <div
             className="
               rounded-2xl
-              border border-slate-700/55
+              border
+              border-slate-700/55
               bg-[#101826]/90
               p-5
-              transition-all duration-300
+              transition-all
+              duration-300
               hover:-translate-y-0.5
               hover:border-emerald-900/50
             "
@@ -1523,9 +1839,11 @@ function OverviewPage() {
               Incident Correlation
             </p>
 
+
             <div
               className="
-                mt-3 flex
+                mt-3
+                flex
                 items-baseline
                 justify-between
                 gap-3
@@ -1539,7 +1857,7 @@ function OverviewPage() {
                 "
               >
                 {evaluation
-                  ? formatPercent(
+                  ? formatOverviewPercent(
                       evaluation
                         .incident_evaluation
                         .recall,
@@ -1560,9 +1878,11 @@ function OverviewPage() {
               </span>
             </div>
 
+
             <p
               className="
-                mt-3 text-xs
+                mt-3
+                text-xs
                 leading-5
                 text-slate-500
               "
@@ -1577,10 +1897,12 @@ function OverviewPage() {
           <div
             className="
               rounded-2xl
-              border border-slate-700/55
+              border
+              border-slate-700/55
               bg-[#101826]/90
               p-5
-              transition-all duration-300
+              transition-all
+              duration-300
               hover:-translate-y-0.5
               hover:border-indigo-900/50
             "
@@ -1596,9 +1918,11 @@ function OverviewPage() {
               Timeline Recovery
             </p>
 
+
             <div
               className="
-                mt-3 flex
+                mt-3
+                flex
                 items-baseline
                 justify-between
                 gap-3
@@ -1613,14 +1937,14 @@ function OverviewPage() {
               >
                 {evaluation
                   ? (
-                    `${evaluation
-                      .incident_evaluation
-                      .timeline_events_recovered} / ${
-                      evaluation
+                      `${evaluation
                         .incident_evaluation
-                        .timeline_events_total
-                    }`
-                  )
+                        .timeline_events_recovered} / ${
+                        evaluation
+                          .incident_evaluation
+                          .timeline_events_total
+                      }`
+                    )
                   : "—"}
               </p>
 
@@ -1636,9 +1960,11 @@ function OverviewPage() {
               </span>
             </div>
 
+
             <p
               className="
-                mt-3 text-xs
+                mt-3
+                text-xs
                 leading-5
                 text-slate-500
               "
@@ -1652,253 +1978,27 @@ function OverviewPage() {
 
 
         {/* =================================================
-            Recent Incident Queue
+            Selected Incident Queue
             ================================================= */}
-        <section
-          className="
-            mt-4 overflow-hidden
-            rounded-2xl
-            border border-slate-700/55
-            bg-[#101826]/90
-            shadow-[0_12px_35px_rgba(0,0,0,0.12)]
-          "
-        >
-          <div
-            className="
-              flex flex-col gap-3
-              border-b
-              border-slate-800
-              px-5 py-5
-              sm:flex-row
-              sm:items-center
-              sm:justify-between
-            "
-          >
-            <div>
-              <p
-                className="
-                  text-[10px]
-                  uppercase
-                  tracking-[0.17em]
-                  text-slate-500
-                "
-              >
-                Investigation Queue
-              </p>
-
-              <h2
-                className="
-                  mt-1.5 text-lg
-                  font-semibold
-                  text-white
-                "
-              >
-                Recent Security Incidents
-              </h2>
-            </div>
-
-            <p
-              className="
-                text-xs
-                text-slate-600
-              "
-            >
-              Latest correlated activity
-            </p>
-          </div>
-
-
-          <div
-            className="
-              divide-y
-              divide-slate-800/70
-            "
-          >
-            {incidents.map(
-              (incident) => (
-                <div
-                  key={
-                    incident
-                      .incident_id
-                  }
-                  className="
-                    group
-                    grid gap-4
-                    px-5 py-4
-                    transition-all
-                    duration-200
-                    hover:bg-[#141e2d]
-                    lg:grid-cols-[120px_1fr_160px_120px_130px]
-                    lg:items-center
-                  "
-                >
-                  <div>
-                    <SeverityBadge
-                      severity={
-                        incident
-                          .severity
-                      }
-                    />
-                  </div>
-
-
-                  <div
-                    className="
-                      min-w-0
-                    "
-                  >
-                    <div
-                      className="
-                        flex flex-wrap
-                        items-center gap-2
-                      "
-                    >
-                      <p
-                        className="
-                          font-mono
-                          text-[10px]
-                          text-cyan-400
-                        "
-                      >
-                        {
-                          incident
-                            .incident_id
-                        }
-                      </p>
-
-                      <span
-                        className="
-                          text-slate-700
-                        "
-                      >
-                        ·
-                      </span>
-
-                      <span
-                        className="
-                          text-[10px]
-                          uppercase
-                          tracking-[0.1em]
-                          text-slate-600
-                        "
-                      >
-                        {formatIncidentType(
-                          incident
-                            .incident_type,
-                        )}
-                      </span>
-                    </div>
-
-                    <p
-                      className="
-                        mt-1
-                        font-medium
-                        text-slate-200
-                        transition-colors
-                        group-hover:text-white
-                      "
-                    >
-                      {
-                        incident.title
-                      }
-                    </p>
-
-                    <p
-                      className="
-                        mt-1
-                        line-clamp-1
-                        text-xs
-                        text-slate-600
-                      "
-                    >
-                      {
-                        incident.summary
-                      }
-                    </p>
-                  </div>
-
-
-                  <div>
-                    <p
-                      className="
-                        text-[10px]
-                        uppercase
-                        tracking-[0.12em]
-                        text-slate-600
-                      "
-                    >
-                      Identity
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        text-slate-300
-                      "
-                    >
-                      {
-                        incident
-                          .primary_employee_user_id
-                          ?? "Unknown"
-                      }
-                    </p>
-                  </div>
-
-
-                  <div>
-                    <p
-                      className="
-                        text-[10px]
-                        uppercase
-                        tracking-[0.12em]
-                        text-slate-600
-                      "
-                    >
-                      Events
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-slate-300
-                      "
-                    >
-                      {incident
-                        .event_count}
-                    </p>
-                  </div>
-
-
-                  <div>
-                    <p
-                      className="
-                        text-[10px]
-                        uppercase
-                        tracking-[0.12em]
-                        text-slate-600
-                      "
-                    >
-                      First Seen
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-xs
-                        text-slate-400
-                      "
-                    >
-                      {formatTimestamp(
-                        incident
-                          .first_seen,
-                      )}
-                    </p>
-                  </div>
-                </div>
-              ),
-            )}
-          </div>
-        </section>
+        <OverviewIncidentQueue
+          incidents={
+            priorityIncidents
+          }
+          onOpenIncident={(
+            incidentId,
+          ) => {
+            navigate(
+              `/incidents/${encodeURIComponent(
+                incidentId,
+              )}`,
+            );
+          }}
+          onOpenAllIncidents={() => {
+            navigate(
+              "/incidents",
+            );
+          }}
+        />
 
 
         {/* =================================================
@@ -1906,8 +2006,10 @@ function OverviewPage() {
             ================================================= */}
         <footer
           className="
-            mt-6 flex
-            flex-col gap-2
+            mt-6
+            flex
+            flex-col
+            gap-2
             border-t
             border-slate-800/70
             py-5
@@ -1926,12 +2028,17 @@ function OverviewPage() {
           <p>
             Isolation Forest
             {" "}
+
             {model
               ? `v${model.model_version}`
               : ""}
+
             {" · "}
+
             Multi-signal correlation
+
             {" · "}
+
             Structured investigation
           </p>
         </footer>

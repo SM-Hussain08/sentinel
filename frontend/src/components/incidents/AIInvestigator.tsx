@@ -16,11 +16,19 @@ import {
   SentinelApiError,
 } from "../../services/api";
 
+import {
+  getAIInvestigationStorageKey,
+  readSessionValue,
+  writeSessionValue,
+} from "../../utils/incidentAIStorage";
+
 import SectionHeader from "../shared/SectionHeader";
 
 
 interface AIInvestigatorProps {
   incidentId: string;
+
+  statusRefreshSignal?: number;
 }
 
 
@@ -126,6 +134,7 @@ function IntelligenceList({
 
 function AIInvestigator({
   incidentId,
+  statusRefreshSignal = 0,
 }: AIInvestigatorProps) {
   const [
     status,
@@ -154,7 +163,15 @@ function AIInvestigator({
     setInvestigation,
   ] = useState<
     AIInvestigationResponse | null
-  >(null);
+  >(() =>
+    readSessionValue<
+      AIInvestigationResponse
+    >(
+      getAIInvestigationStorageKey(
+        incidentId,
+      ),
+    ),
+  );
 
   const [
     isGenerating,
@@ -189,9 +206,6 @@ function AIInvestigator({
     let cancelled = false;
 
     async function loadStatus() {
-      setIsLoadingStatus(
-        true,
-      );
 
       try {
         const result =
@@ -244,7 +258,9 @@ function AIInvestigator({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [
+    statusRefreshSignal,
+  ]);
 
 
   /*
@@ -383,6 +399,14 @@ function AIInvestigator({
       setInvestigation(
         result,
       );
+
+      writeSessionValue(
+        getAIInvestigationStorageKey(
+          incidentId,
+        ),
+        result,
+      );
+
     } catch (
       error
     ) {
@@ -592,10 +616,29 @@ function AIInvestigator({
           "
         >
           <div>
+            <span
+              className="
+                mb-1.5
+                inline-flex
+                rounded-md
+                border
+                border-cyan-900/50
+                bg-cyan-950/20
+                px-2
+                py-1
+                text-[9px]
+                font-bold
+                uppercase
+                tracking-[0.18em]
+                text-cyan-400
+              "
+            >
+              Local AI
+            </span>
+
             <SectionHeader
-              eyebrow="Local AI"
+              eyebrow="Evidence-grounded analyst intelligence"
               title="AI Investigator"
-              helper="Evidence-grounded analyst intelligence"
             />
 
             <p

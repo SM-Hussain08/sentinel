@@ -16,9 +16,18 @@ import {
   SentinelApiError,
 } from "../../services/api";
 
+import {
+  getAIChatStorageKey,
+  readSessionValue,
+  removeSessionValue,
+  writeSessionValue,
+} from "../../utils/incidentAIStorage";
+
 
 interface AIAnalystChatProps {
   incidentId: string;
+
+  statusRefreshSignal?: number;
 }
 
 
@@ -311,6 +320,7 @@ function getResponseMetadata(
 
 function AIAnalystChat({
   incidentId,
+  statusRefreshSignal = 0,
 }: AIAnalystChatProps) {
   const [
     status,
@@ -339,7 +349,16 @@ function AIAnalystChat({
     setMessages,
   ] = useState<
     DisplayMessage[]
-  >([]);
+  >(() =>
+    readSessionValue<
+      DisplayMessage[]
+    >(
+      getAIChatStorageKey(
+        incidentId,
+      ),
+    )
+    ?? [],
+  );
 
   const [
     input,
@@ -381,6 +400,43 @@ function AIAnalystChat({
       0,
     );
 
+  
+  // ==========================================================
+  // Precise Scroll Helper
+  // ==========================================================
+
+  function scrollToChatEnd() {
+    /*
+    * Wait until React has committed the
+    * newly rendered chat content before
+    * asking the browser to scroll.
+    *
+    * This function is called only for
+    * explicit chat interactions:
+    * - sending a question
+    * - receiving an AI response
+    * - rendering a request error
+    * - retrying a request
+    */
+    window.requestAnimationFrame(
+      () => {
+        window.requestAnimationFrame(
+          () => {
+            messagesEndRef
+              .current
+              ?.scrollIntoView({
+                behavior:
+                  "smooth",
+
+                block:
+                  "nearest",
+              });
+          },
+        );
+      },
+    );
+  }
+
 
   // ==========================================================
   // Local AI status
@@ -392,10 +448,6 @@ function AIAnalystChat({
 
 
     async function loadStatus() {
-      setIsLoadingStatus(
-        true,
-      );
-
       try {
         const result =
           await getAIServiceStatus();
@@ -450,7 +502,9 @@ function AIAnalystChat({
       cancelled =
         true;
     };
-  }, []);
+  }, [
+    statusRefreshSignal,
+  ]);
 
 
   // ==========================================================
@@ -495,26 +549,6 @@ function AIAnalystChat({
     isSending,
   ]);
 
-
-  // ==========================================================
-  // Auto-scroll
-  // ==========================================================
-
-  useEffect(() => {
-    messagesEndRef
-      .current
-      ?.scrollIntoView({
-        behavior:
-          "smooth",
-
-        block:
-          "nearest",
-      });
-  }, [
-    messages,
-    isSending,
-    failedRequest,
-  ]);
 
 
   const aiReady =
@@ -747,19 +781,19 @@ function AIAnalystChat({
         response,
         ] = await Promise.all([
         sendAIIncidentChatMessage(
-            incidentId,
-            {
+          incidentId,
+          {
             message:
-                question,
+              question,
 
             history,
-            },
+          },
         ),
 
         sleep(
-            MINIMUM_RESPONSE_DISPLAY_MS,
+          MINIMUM_RESPONSE_DISPLAY_MS,
         ),
-        ]);
+      ]);
 
 
       /*
@@ -809,11 +843,27 @@ function AIAnalystChat({
       setMessages(
         (
           current,
-        ) => [
-          ...current,
-          assistantMessage,
-        ],
+        ) => {
+          const completedMessages = [
+            ...current,
+            assistantMessage,
+          ];
+
+
+          writeSessionValue(
+            getAIChatStorageKey(
+              incidentId,
+            ),
+            completedMessages,
+          );
+
+
+          return completedMessages;
+        },
       );
+
+      scrollToChatEnd();
+
     } catch (
       error
     ) {
@@ -844,6 +894,9 @@ function AIAnalystChat({
         status:
           failure.statusCode,
       });
+
+      // scrollToChatEnd();
+
     } finally {
       if (
         requestIdRef.current
@@ -921,6 +974,8 @@ function AIAnalystChat({
       "",
     );
 
+    scrollToChatEnd();
+
 
     await executeRequest({
       question,
@@ -959,6 +1014,7 @@ function AIAnalystChat({
       null,
     );
 
+    scrollToChatEnd();
 
     await executeRequest({
       question:
@@ -1072,6 +1128,12 @@ function AIAnalystChat({
 
     setMessages(
       [],
+    );
+
+    removeSessionValue(
+      getAIChatStorageKey(
+        incidentId,
+      ),
     );
 
     setFailedRequest(
@@ -1232,42 +1294,94 @@ function AIAnalystChat({
               gap-3
             "
           >
-            <div
-              className="
-                flex
-                items-center
-                gap-2
-              "
-            >
-              <div
-                className={`
-                  h-2
-                  w-2
-                  rounded-full
-                  ${
-                    aiReady
-                      ? "bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"
-                      : "bg-slate-600"
-                  }
-                `}
-              />
-
+            {isLoadingStatus && (
               <span
                 className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  rounded-full
+                  border
+                  border-slate-700
+                  bg-[#0b111c]
+                  px-3 py-1.5
                   text-[10px]
-                  font-medium
-                  uppercase
-                  tracking-[0.12em]
+                  font-semibold
+                  tracking-[0.1em]
                   text-slate-500
                 "
               >
-                {isLoadingStatus
-                  ? "Checking AI"
-                  : aiReady
-                    ? "Ready"
-                    : "Unavailable"}
+                <span
+                  className="
+                    h-1.5 w-1.5
+                    animate-pulse
+                    rounded-full
+                    bg-slate-500
+                  "
+                />
+
+                CHECKING AI
               </span>
-            </div>
+            )}
+
+            {!isLoadingStatus && aiReady && (
+              <span
+                className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  rounded-full
+                  border
+                  border-emerald-900/55
+                  bg-emerald-950/20
+                  px-3 py-1.5
+                  text-[10px]
+                  font-semibold
+                  tracking-[0.1em]
+                  text-emerald-300
+                "
+              >
+                <span
+                  className="
+                    h-1.5 w-1.5
+                    rounded-full
+                    bg-emerald-400
+                    shadow-[0_0_9px_rgba(52,211,153,0.75)]
+                  "
+                />
+
+                LOCAL AI READY
+              </span>
+            )}
+
+            {!isLoadingStatus && !aiReady && (
+              <span
+                className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  rounded-full
+                  border
+                  border-amber-900/55
+                  bg-amber-950/20
+                  px-3 py-1.5
+                  text-[10px]
+                  font-semibold
+                  tracking-[0.1em]
+                  text-amber-300
+                "
+              >
+                <span
+                  className="
+                    h-1.5 w-1.5
+                    rounded-full
+                    bg-amber-400
+                  "
+                />
+
+                AI UNAVAILABLE
+              </span>
+            )}
 
 
             {(messages.length
@@ -1458,22 +1572,22 @@ function AIAnalystChat({
 
               const latestAssistantMessage =
                 [...messages]
-                    .reverse()
-                    .find(
+                  .reverse()
+                  .find(
                     (
-                        candidate,
+                      candidate,
                     ) => (
-                        candidate.role
-                        === "assistant"
+                      candidate.role
+                      === "assistant"
                     ),
-                    );
+                  );
 
 
               const isLatestAssistant =
                 !isUser
                 && latestAssistantMessage
-                    ?.id
-                    === message.id;
+                  ?.id
+                  === message.id;
 
 
               const metadata =
@@ -1648,7 +1762,7 @@ function AIAnalystChat({
 
                           {isLatestAssistant
                             && message
-                                .retryContext
+                              .retryContext
                             && (
                               <button
                                 type="button"

@@ -222,6 +222,18 @@ export function getIncidentInvestigation(
   );
 }
 
+export function getIncidentsForEvent(
+  eventId: string,
+) {
+  return request<
+    IncidentListItem[]
+  >(
+    `/incidents/by-event/${encodeURIComponent(
+      eventId,
+    )}`,
+  );
+}
+
 export function getEvaluationSummary() {
   return request<EvaluationSummary>(
     "/evaluation/summary",

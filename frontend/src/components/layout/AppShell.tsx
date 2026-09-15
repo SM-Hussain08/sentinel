@@ -2,6 +2,11 @@ import {
   useState,
 } from "react";
 
+import {
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+
 import logo from "../../assets/logo.png";
 import backgroundLogo from "../../assets/background-light.png";
 
@@ -14,12 +19,6 @@ export type AppPage =
 
 
 interface AppShellProps {
-  activePage: AppPage;
-
-  onNavigate: (
-    page: AppPage,
-  ) => void;
-
   children:
     React.ReactNode;
 }
@@ -32,6 +31,8 @@ interface NavigationItem {
   description: string;
 
   icon: string;
+
+  path: string;
 }
 
 
@@ -43,6 +44,7 @@ const NAVIGATION_ITEMS:
       description:
         "Security operations",
       icon: "◈",
+      path: "/",
     },
 
     {
@@ -51,6 +53,7 @@ const NAVIGATION_ITEMS:
       description:
         "Correlated investigations",
       icon: "◇",
+      path: "/incidents",
     },
 
     {
@@ -59,6 +62,7 @@ const NAVIGATION_ITEMS:
       description:
         "Behavioral detection",
       icon: "⌁",
+      path: "/anomalies",
     },
 
     {
@@ -67,15 +71,20 @@ const NAVIGATION_ITEMS:
       description:
         "Detection intelligence",
       icon: "◎",
+      path: "/model",
     },
   ];
 
 
 function AppShell({
-  activePage,
-  onNavigate,
   children,
 }: AppShellProps) {
+  const location =
+    useLocation();
+
+  const routerNavigate =
+    useNavigate();
+
   const [
     mobileOpen,
     setMobileOpen,
@@ -86,11 +95,42 @@ function AppShell({
     setSidebarCollapsed,
   ] = useState(false);
 
+  const activePage:
+  AppPage =
+    location.pathname
+      .startsWith(
+        "/incidents",
+      )
+      ? "incidents"
+      : location.pathname
+          .startsWith(
+            "/anomalies",
+          )
+        ? "anomalies"
+        : location.pathname
+            .startsWith(
+              "/model",
+            )
+          ? "model"
+          : "overview";
+
 
   function navigate(
     page: AppPage,
   ) {
-    onNavigate(page);
+    const destination =
+      NAVIGATION_ITEMS.find(
+        (item) =>
+          item.id === page,
+      );
+
+    if (!destination) {
+      return;
+    }
+
+    routerNavigate(
+      destination.path,
+    );
 
     setMobileOpen(
       false,
@@ -677,7 +717,7 @@ function AppShell({
         ].join(" ")}
       >
         <div
-          key={activePage}
+          key={location.pathname}
           className="
             sentinel-page-enter
             relative

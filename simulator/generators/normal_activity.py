@@ -22,9 +22,7 @@ class NormalActivityGenerator:
         )
 
         self.event_factory = (
-            EventFactory(
-                starting_sequence=1000,
-            )
+            EventFactory()
         )
 
     def _working_start_time(

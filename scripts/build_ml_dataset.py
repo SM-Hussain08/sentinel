@@ -161,7 +161,7 @@ def build_ml_dataset() -> None:
         print("Feature Columns")
         print("-" * 66)
 
-        for feature in FEATURE_COLUMNS:
+        for feature in DATASET_FEATURE_COLUMNS:
             print(
                 f"  - {feature}"
             )

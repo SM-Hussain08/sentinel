@@ -8,6 +8,10 @@ import {
   formatOverviewTimestamp,
 } from "./overviewStyles";
 
+import {
+  useNavigate,
+} from "react-router-dom";
+
 
 interface OverviewIncidentQueueProps {
   incidents:
@@ -58,6 +62,10 @@ function OverviewIncidentQueue({
   onOpenIncident,
   onOpenAllIncidents,
 }: OverviewIncidentQueueProps) {
+
+  const navigate =
+    useNavigate();
+
   return (
     <section
       className="
@@ -301,20 +309,96 @@ function OverviewIncidentQueue({
                   Identity
                 </p>
 
-                <p
-                  className="
-                    mt-1
-                    text-sm
-                    text-slate-300
-                  "
-                >
-                  {
-                    incident
-                      .primary_employee_user_id
-                    ?? "Unknown"
-                  }
-                </p>
+                {(() => {
+                  const userId =
+                    incident.primary_employee_user_id;
+
+                  return userId ? (
+                    <span
+                      role="link"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.stopPropagation();
+
+                        navigate(
+                          `/employees/${encodeURIComponent(
+                            userId,
+                          )}`,
+                        );
+                      }}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key ===
+                            "Enter" ||
+                          event.key ===
+                            " "
+                        ) {
+                          event.preventDefault();
+                          event.stopPropagation();
+
+                          navigate(
+                            `/employees/${encodeURIComponent(
+                              userId,
+                            )}`,
+                          );
+                        }
+                      }}
+                      className="
+                        group
+                        mt-1
+                        inline-flex
+                        cursor-pointer
+                        items-center
+                        rounded-md
+                        border
+                        border-slate-700/70
+                        bg-slate-900/40
+                        px-2 py-1
+                        font-mono
+                        text-sm
+                        font-medium
+                        text-slate-300
+                        transition-colors
+                        duration-150
+
+                        hover:border-slate-600
+                        hover:bg-slate-800/60
+                        hover:text-slate-100
+
+                        focus-visible:outline-none
+                        focus-visible:ring-1
+                        focus-visible:ring-slate-600
+                      "
+                    >
+                      {userId}
+
+                      <span
+                        aria-hidden="true"
+                        className="
+                          ml-1.5
+                          text-slate-600
+                          transition-colors
+                          duration-150
+                          group-hover:text-slate-400
+                        "
+                      >
+                        →
+                      </span>
+                    </span>
+                  ) : (
+                    <p
+                      className="
+                        mt-1
+                        text-sm
+                        text-slate-600
+                      "
+                    >
+                      Unknown
+                    </p>
+                  );
+                })()}
               </div>
+
 
 
               <div>

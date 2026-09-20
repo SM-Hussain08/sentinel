@@ -15,8 +15,18 @@ from app.schemas.anomaly_feed import (
 )
 
 from app.schemas.employee import (
+    EmployeeActivityItem,
+    EmployeeActivityPage,
+    EmployeeAnomalyItem,
+    EmployeeBehaviorBaseline,
     EmployeeCreate,
+    EmployeeDetail,
+    EmployeeDirectoryItem,
+    EmployeeDirectoryPage,
+    EmployeeIncidentItem,
     EmployeeRead,
+    EmployeeSecuritySummary,
+    EmployeeWorkforceSummary,
 )
 
 from app.schemas.evaluation import (
@@ -49,6 +59,19 @@ from app.schemas.ml import (
     MLSummary,
 )
 
+from app.schemas.operations import (
+    OperationsStatus,
+    ProcessorDetectorInfo,
+    ProcessorRuntimeCounters,
+    ProcessorRuntimeStatus,
+    RuntimeErrorInfo,
+    RuntimeHealth,
+    SimulationObservedMetrics,
+    SimulationRuntimeClock,
+    SimulationRuntimeConfiguration,
+    SimulationRuntimeStatus,
+)
+
 from app.schemas.ai_chat import (
     AIChatHistoryMessage,
     AIIncidentChatContent,
@@ -59,8 +82,18 @@ from app.schemas.ai_chat import (
 
 __all__ = [
     # Employees
+    "EmployeeActivityItem",
+    "EmployeeActivityPage",
+    "EmployeeAnomalyItem",
+    "EmployeeBehaviorBaseline",
     "EmployeeCreate",
+    "EmployeeDetail",
+    "EmployeeDirectoryItem",
+    "EmployeeDirectoryPage",
+    "EmployeeIncidentItem",
     "EmployeeRead",
+    "EmployeeSecuritySummary",
+    "EmployeeWorkforceSummary",
 
     # Events
     "EventCreate",
@@ -77,6 +110,18 @@ __all__ = [
     "MLModelInfo",
     "MLRiskDistribution",
     "MLSummary",
+
+    # Operations runtime
+    "OperationsStatus",
+    "ProcessorDetectorInfo",
+    "ProcessorRuntimeCounters",
+    "ProcessorRuntimeStatus",
+    "RuntimeErrorInfo",
+    "RuntimeHealth",
+    "SimulationObservedMetrics",
+    "SimulationRuntimeClock",
+    "SimulationRuntimeConfiguration",
+    "SimulationRuntimeStatus",
 
     # Incidents
     "IncidentDetail",

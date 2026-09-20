@@ -68,8 +68,6 @@ class BruteForceScenario:
                         "attempt_number": attempt + 1,
                     },
 
-                    is_injected_anomaly=True,
-                    scenario_type=self.scenario_type,
                 )
             )
 

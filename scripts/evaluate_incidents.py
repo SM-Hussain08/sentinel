@@ -43,6 +43,11 @@ for path in (
 
 from app.database.session import SessionLocal  # noqa: E402
 
+from app.services.evaluation_ground_truth import (  # noqa: E402
+    controlled_attack_rows,
+)
+
+
 from app.models import (  # noqa: E402
     Event,
     Incident,
@@ -73,32 +78,29 @@ def evaluate_incidents() -> None:
         # Load controlled ground-truth attack events
         # -------------------------------------------------
 
-        attack_events = list(
-            db.scalars(
-                select(
-                    Event
-                )
-                .where(
-                    Event.is_injected_anomaly.is_(
-                        True
-                    ),
-
-                    Event.event_metadata[
-                        "simulation_batch"
-                    ].astext
-                    == EVALUATION_BATCH,
-                )
-                .order_by(
-                    Event.timestamp
-                )
-            ).all()
+        attack_truth_rows = (
+            controlled_attack_rows(
+                db=db,
+                simulation_batch=(
+                    EVALUATION_BATCH
+                ),
+            )
         )
 
-        if not attack_events:
+        if not attack_truth_rows:
             raise RuntimeError(
-                "No controlled Phase 3 attack "
-                "events were found."
+                "No controlled Phase 3 private "
+                "ground-truth events were found."
             )
+
+        attack_events = [
+            event
+            for (
+                event,
+                _truth,
+            )
+            in attack_truth_rows
+        ]
 
         # One controlled attack instance exists per scenario
         # in phase3_attack_batch_01.
@@ -107,10 +109,13 @@ def evaluate_incidents() -> None:
             set,
         ] = defaultdict(set)
 
-        for event in attack_events:
-            if event.scenario_type:
+        for (
+            event,
+            truth,
+        ) in attack_truth_rows:
+            if truth.scenario_type:
                 ground_truth_by_scenario[
-                    event.scenario_type
+                    truth.scenario_type
                 ].add(
                     event.id
                 )

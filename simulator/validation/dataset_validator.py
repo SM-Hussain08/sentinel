@@ -1,10 +1,24 @@
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import (
+    dataclass,
+    field,
+)
 
-from sqlalchemy import func, select
+from sqlalchemy import (
+    func,
+    select,
+)
 from sqlalchemy.orm import Session
 
-from app.models import Employee, Event
+from app.models import (
+    Employee,
+    Event,
+)
+
+from app.services.evaluation_ground_truth import (
+    count_injected_events,
+    count_invalid_ground_truth,
+    scenario_types,
+)
 
 
 REQUIRED_EVENT_TYPES = {
@@ -45,7 +59,9 @@ class DatasetValidationReport:
     Collection of validation checks for one SENTINEL dataset.
     """
 
-    results: list[ValidationResult] = field(
+    results: list[
+        ValidationResult
+    ] = field(
         default_factory=list
     )
 
@@ -64,28 +80,43 @@ class DatasetValidationReport:
         )
 
     @property
-    def passed_count(self) -> int:
+    def passed_count(
+        self,
+    ) -> int:
         return sum(
             result.passed
-            for result in self.results
+            for result
+            in self.results
         )
 
     @property
-    def failed_count(self) -> int:
+    def failed_count(
+        self,
+    ) -> int:
         return (
-            len(self.results)
+            len(
+                self.results
+            )
             - self.passed_count
         )
 
     @property
-    def all_passed(self) -> bool:
-        return self.failed_count == 0
+    def all_passed(
+        self,
+    ) -> bool:
+        return (
+            self.failed_count
+            == 0
+        )
 
 
 class DatasetValidator:
     """
-    Performs structural and behavioral quality checks against the
-    SENTINEL synthetic dataset.
+    Structural and behavioral validation for SENTINEL's controlled dataset.
+
+    Ground-truth validation reads ONLY SimulationGroundTruth.
+    Event contains observable security telemetry only from the evaluator's
+    point of view.
     """
 
     def __init__(
@@ -94,7 +125,9 @@ class DatasetValidator:
     ) -> None:
         self.db = db
 
-    def _count_employees(self) -> int:
+    def _count_employees(
+        self,
+    ) -> int:
         return int(
             self.db.scalar(
                 select(
@@ -106,7 +139,9 @@ class DatasetValidator:
             or 0
         )
 
-    def _count_events(self) -> int:
+    def _count_events(
+        self,
+    ) -> int:
         return int(
             self.db.scalar(
                 select(
@@ -121,117 +156,67 @@ class DatasetValidator:
     def _event_types(
         self,
     ) -> set[str]:
-        rows = self.db.execute(
+        rows = self.db.scalars(
             select(
                 Event.event_type
             )
             .distinct()
-        ).scalars()
+        ).all()
 
-        return set(rows)
+        return set(
+            rows
+        )
 
     def _scenario_types(
         self,
     ) -> set[str]:
-        rows = self.db.execute(
-            select(
-                Event.scenario_type
-            )
-            .where(
-                Event.scenario_type.is_not(
-                    None
-                )
-            )
-            .distinct()
-        ).scalars()
-
-        return {
-            value
-            for value in rows
-            if value
-        }
+        return scenario_types(
+            self.db
+        )
 
     def _count_injected(
         self,
     ) -> int:
-        return int(
-            self.db.scalar(
-                select(
-                    func.count(
-                        Event.id
-                    )
-                )
-                .where(
-                    Event.is_injected_anomaly.is_(
-                        True
-                    )
-                )
-            )
-            or 0
+        return count_injected_events(
+            self.db
         )
 
     def _count_normal(
         self,
     ) -> int:
-        return int(
-            self.db.scalar(
-                select(
-                    func.count(
-                        Event.id
-                    )
-                )
-                .where(
-                    Event.is_injected_anomaly.is_(
-                        False
-                    )
-                )
-            )
-            or 0
+        # Normal events intentionally have no private attack truth row.
+        return (
+            self._count_events()
+            - self._count_injected()
         )
 
     def _count_invalid_ground_truth(
         self,
     ) -> int:
-        """
-        Normal events should never carry an attack scenario label.
-        """
-
-        return int(
-            self.db.scalar(
-                select(
-                    func.count(
-                        Event.id
-                    )
-                )
-                .where(
-                    Event.is_injected_anomaly.is_(
-                        False
-                    ),
-                    Event.scenario_type.is_not(
-                        None
-                    ),
-                )
-            )
-            or 0
+        return count_invalid_ground_truth(
+            self.db
         )
 
     def _duplicate_event_ids(
         self,
     ) -> int:
-        duplicate_rows = self.db.execute(
-            select(
-                Event.event_id
-            )
-            .group_by(
-                Event.event_id
-            )
-            .having(
-                func.count(
-                    Event.id
+        duplicate_rows = (
+            self.db.execute(
+                select(
+                    Event.event_id
                 )
-                > 1
+                .group_by(
+                    Event.event_id
+                )
+                .having(
+                    func.count(
+                        Event.id
+                    )
+                    > 1
+                )
             )
-        ).all()
+            .all()
+        )
 
         return len(
             duplicate_rows
@@ -241,7 +226,7 @@ class DatasetValidator:
         self,
     ) -> int:
         """
-        Verify that all events still map to a valid employee.
+        Verify that every event still references a valid employee.
         """
 
         count = self.db.scalar(
@@ -310,13 +295,15 @@ class DatasetValidator:
             self._event_types()
         )
 
-        scenario_types = (
+        private_scenario_types = (
             self._scenario_types()
         )
 
         report.add(
             name="employee_count",
-            passed=employee_count >= 100,
+            passed=(
+                employee_count >= 100
+            ),
             message=(
                 f"Employees available: "
                 f"{employee_count}"
@@ -325,7 +312,9 @@ class DatasetValidator:
 
         report.add(
             name="event_volume",
-            passed=event_count >= 5000,
+            passed=(
+                event_count >= 5000
+            ),
             message=(
                 f"Events available: "
                 f"{event_count}"
@@ -335,7 +324,8 @@ class DatasetValidator:
         report.add(
             name="department_diversity",
             passed=(
-                self._employee_department_count()
+                self
+                ._employee_department_count()
                 >= 5
             ),
             message=(
@@ -351,7 +341,9 @@ class DatasetValidator:
 
         report.add(
             name="required_event_types",
-            passed=not missing_events,
+            passed=(
+                not missing_events
+            ),
             message=(
                 "All required event types present."
                 if not missing_events
@@ -368,12 +360,14 @@ class DatasetValidator:
 
         missing_scenarios = (
             REQUIRED_SCENARIOS
-            - scenario_types
+            - private_scenario_types
         )
 
         report.add(
             name="attack_scenarios",
-            passed=not missing_scenarios,
+            passed=(
+                not missing_scenarios
+            ),
             message=(
                 "All attack scenarios present."
                 if not missing_scenarios
@@ -414,17 +408,19 @@ class DatasetValidator:
         )
 
         invalid_ground_truth = (
-            self._count_invalid_ground_truth()
+            self
+            ._count_invalid_ground_truth()
         )
 
         report.add(
             name="ground_truth_integrity",
             passed=(
-                invalid_ground_truth == 0
+                invalid_ground_truth
+                == 0
             ),
             message=(
-                "Normal events carrying "
-                f"scenario labels: "
+                "Invalid private ground-truth "
+                f"rows: "
                 f"{invalid_ground_truth}"
             ),
         )

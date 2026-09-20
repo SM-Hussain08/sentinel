@@ -101,8 +101,6 @@ def seed_initial_data() -> None:
                 "protocol": "HTTPS",
                 "authentication_method": "PASSWORD",
             },
-            is_injected_anomaly=False,
-            scenario_type=None,
         )
 
         db.add(event)

@@ -1,12 +1,12 @@
 {
   "incident_evaluation": {
     "true_positive_incidents": 5,
-    "false_positive_incidents": 2,
+    "false_positive_incidents": 3,
     "attack_instances_detected": 5,
     "attack_instances_total": 5,
-    "precision": 0.7142857142857143,
+    "precision": 0.625,
     "recall": 1.0,
-    "f1_score": 0.8333333333333333,
+    "f1_score": 0.7692307692307693,
     "timeline_events_recovered": 89,
     "timeline_events_total": 89,
     "timeline_recovery_rate": 1.0
@@ -15,5 +15,5 @@
     "ground_truth_batch": "phase3_attack_batch_01",
     "ground_truth_policy": "Simulator ground-truth labels are used only for offline evaluation and never for operational inference."
   },
-  "generated_at": "2026-08-31T14:31:12.187057+00:00"
+  "generated_at": "2026-09-20T16:24:06.087711+00:00"
 }

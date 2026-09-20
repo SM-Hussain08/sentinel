@@ -16,6 +16,7 @@ import {
   getIncidentSummary,
   getMLModelInfo,
   getMLSummary,
+  getOperationsStatus,
 } from "../services/api";
 
 import type {
@@ -25,6 +26,7 @@ import type {
   IncidentSummary,
   MLModelInfo,
   MLSummary,
+  ProcessorRuntimeStatus,
 } from "../types/api";
 
 import OverviewIncidentQueue from "../components/overview/OverviewIncidentQueue";
@@ -218,6 +220,16 @@ function OverviewPage() {
     null,
   );
 
+  const [
+    processorStatus,
+    setProcessorStatus,
+  ] = useState<
+    ProcessorRuntimeStatus
+    | null
+  >(
+    null,
+  );
+
 
   const [
     isLoading,
@@ -276,6 +288,13 @@ function OverviewPage() {
     0,
   );
 
+  const [
+    currentTimeMs,
+    setCurrentTimeMs,
+  ] = useState(
+    0,
+  );
+
 
   const refreshInFlightRef =
     useRef(
@@ -303,6 +322,7 @@ function OverviewPage() {
           machineLearningSummary,
           modelInfo,
           evaluationData,
+          operationsData,
         ] = await Promise.all([
           getEmployees(),
 
@@ -317,6 +337,11 @@ function OverviewPage() {
           getMLModelInfo(),
 
           getEvaluationSummary(),
+
+          getOperationsStatus()
+            .catch(
+              () => null,
+            ),
         ]);
 
 
@@ -350,6 +375,14 @@ function OverviewPage() {
         setEvaluation(
           evaluationData,
         );
+
+        if (
+          operationsData
+        ) {
+          setProcessorStatus(
+            operationsData.sentinel,
+          );
+        }
 
 
         setLastRefreshedAt(
@@ -411,6 +444,10 @@ function OverviewPage() {
             (current) =>
               current + 1,
           );
+
+          setCurrentTimeMs(
+            Date.now(),
+          );
         },
         1000,
       );
@@ -459,6 +496,7 @@ function OverviewPage() {
           machineLearningSummary,
           modelInfo,
           evaluationData,
+          operationsData,
         ] = await Promise.all([
           getEmployees(),
 
@@ -473,6 +511,11 @@ function OverviewPage() {
           getMLModelInfo(),
 
           getEvaluationSummary(),
+
+          getOperationsStatus()
+            .catch(
+              () => null,
+            ),
         ]);
 
 
@@ -506,6 +549,14 @@ function OverviewPage() {
         setEvaluation(
           evaluationData,
         );
+
+        if (
+          operationsData
+        ) {
+          setProcessorStatus(
+            operationsData.sentinel,
+          );
+        }
 
 
         setLastRefreshedAt(
@@ -596,6 +647,7 @@ function OverviewPage() {
         machineLearningSummary,
         modelInfo,
         evaluationData,
+        operationsData,
       ] = await Promise.all([
         getEmployees(),
 
@@ -610,6 +662,11 @@ function OverviewPage() {
         getMLModelInfo(),
 
         getEvaluationSummary(),
+
+        getOperationsStatus()
+          .catch(
+            () => null,
+          ),
       ]);
 
 
@@ -636,6 +693,14 @@ function OverviewPage() {
       setEvaluation(
         evaluationData,
       );
+
+      if (
+        operationsData
+      ) {
+        setProcessorStatus(
+          operationsData.sentinel,
+        );
+      }
 
 
       setLastRefreshedAt(
@@ -923,6 +988,12 @@ function OverviewPage() {
             }
             refreshAgeSeconds={
               refreshAgeSeconds
+            }
+            processorStatus={
+              processorStatus
+            }
+            currentTimeMs={
+              currentTimeMs
             }
             onRefresh={() => {
               void refreshOverview();

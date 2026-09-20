@@ -112,29 +112,11 @@ class Event(Base):
         default=dict,
     )
 
-    # -----------------------------------------------------
-    # SIMULATOR GROUND TRUTH
-    # -----------------------------------------------------
-    #
-    # These fields are NEVER provided to anomaly detectors.
-    #
-    # They are only used later to evaluate whether SENTINEL
-    # successfully identifies incidents injected by the simulator.
-    is_injected_anomaly: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=False,
-    )
-
-    scenario_type: Mapped[str | None] = mapped_column(
-        String(80),
-        nullable=True,
-    )
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
 
     employee = relationship(

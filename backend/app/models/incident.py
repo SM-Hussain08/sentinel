@@ -67,6 +67,28 @@ class Incident(Base):
         default="OPEN",
     )
 
+    detector_name: Mapped[str] = mapped_column(
+        String(80),
+        index=True,
+        nullable=False,
+    )
+
+    detector_version: Mapped[str] = mapped_column(
+        String(40),
+        index=True,
+        nullable=False,
+    )
+
+    correlation_engine: Mapped[str] = mapped_column(
+        String(80),
+        nullable=False,
+    )
+
+    correlation_version: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+    )
+
     primary_employee_id: Mapped[
         UUID | None
     ] = mapped_column(

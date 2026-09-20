@@ -32,10 +32,6 @@ from app.schemas.incident import (
     IncidentTimelineEvent,
 )
 
-from app.selected_detector import (
-    SELECTED_DETECTOR,
-)
-
 
 router = APIRouter(
     prefix="/incidents",
@@ -468,6 +464,22 @@ def get_incident(
             incident.status
         ),
 
+        detector_name=(
+            incident.detector_name
+        ),
+
+        detector_version=(
+            incident.detector_version
+        ),
+
+        correlation_engine=(
+            incident.correlation_engine
+        ),
+
+        correlation_version=(
+            incident.correlation_version
+        ),
+
         primary_employee_user_id=(
             employee.user_id
             if employee
@@ -574,10 +586,10 @@ def get_incident_timeline(
             == incident.id,
 
             AnomalyScore.detector_name
-            == SELECTED_DETECTOR.name,
+            == incident.detector_name,
 
             AnomalyScore.detector_version
-            == SELECTED_DETECTOR.version,
+            == incident.detector_version,
         )
         .order_by(
             IncidentEvent.sequence_number

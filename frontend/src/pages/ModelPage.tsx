@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -32,30 +33,8 @@ interface PerformanceCardProps {
 interface FeatureGroup {
   title: string;
   description: string;
-
   features: string[];
 }
-
-
-const V1_FEATURES = [
-  "hour_sin",
-  "hour_cos",
-  "outside_work_hours",
-  "source_ip_is_baseline",
-  "remote_work_probability",
-  "bytes_sent",
-  "bytes_received",
-  "total_bytes",
-  "data_volume_ratio",
-  "success",
-  "failed_logins_10m",
-  "events_5m",
-  "file_events_30m",
-  "network_events_5m",
-  "unique_destinations_5m",
-  "bytes_sent_30m",
-  "bytes_received_30m",
-];
 
 
 const FEATURE_GROUPS:
@@ -65,7 +44,7 @@ const FEATURE_GROUPS:
         "Temporal Behavior",
 
       description:
-        "Captures when activity occurs relative to learned normal working patterns.",
+        "Captures when activity occurs relative to learned working patterns.",
 
       features: [
         "hour_sin",
@@ -79,7 +58,7 @@ const FEATURE_GROUPS:
         "Identity Context",
 
       description:
-        "Compares event context with the employee's behavioral baseline.",
+        "Compares event context against the employee behavioral baseline.",
 
       features: [
         "source_ip_is_baseline",
@@ -93,7 +72,7 @@ const FEATURE_GROUPS:
         "Data Volume",
 
       description:
-        "Measures transfer size and deviation from expected employee activity.",
+        "Measures transfer volume and deviation from expected activity.",
 
       features: [
         "bytes_sent",
@@ -108,7 +87,7 @@ const FEATURE_GROUPS:
         "Rolling Behavior",
 
       description:
-        "Tracks activity density and recent authentication or file behavior.",
+        "Tracks recent authentication, event density and file activity.",
 
       features: [
         "failed_logins_10m",
@@ -132,6 +111,30 @@ const FEATURE_GROUPS:
       ],
     },
   ];
+
+
+const RISK_LEVELS = [
+  {
+    key: "CRITICAL",
+    label: "Critical",
+  },
+  {
+    key: "HIGH",
+    label: "High",
+  },
+  {
+    key: "MEDIUM",
+    label: "Medium",
+  },
+  {
+    key: "LOW",
+    label: "Low",
+  },
+  {
+    key: "NORMAL",
+    label: "Normal",
+  },
+] as const;
 
 
 function formatNumber(
@@ -160,11 +163,32 @@ function formatFeatureName(
     .split("_")
     .map(
       (word) =>
-        word.charAt(0)
-        + word
-          .slice(1),
+        word.charAt(0).toUpperCase()
+        + word.slice(1),
     )
     .join(" ");
+}
+
+
+function formatDateTime(
+  value: string,
+): string {
+  return new Date(
+    value,
+  ).toLocaleString();
+}
+
+
+function formatRefreshTime(
+  value: Date,
+): string {
+  return value.toLocaleTimeString(
+    [],
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+    },
+  );
 }
 
 
@@ -177,7 +201,8 @@ function PerformanceCard({
   return (
     <div
       className="
-        group rounded-2xl
+        group relative overflow-hidden
+        rounded-2xl
         border border-slate-700/55
         bg-[#101826]/90
         p-5
@@ -186,11 +211,26 @@ function PerformanceCard({
         hover:-translate-y-1
         hover:border-slate-600/70
         hover:bg-[#121c2b]
+        hover:shadow-[0_18px_40px_rgba(0,0,0,0.16)]
       "
     >
+      <div
+        className="
+          pointer-events-none
+          absolute -right-10 -top-10
+          h-24 w-24
+          rounded-full
+          bg-cyan-400/[0.025]
+          blur-3xl
+          transition-all
+          duration-300
+          group-hover:bg-cyan-400/[0.055]
+        "
+      />
+
       <p
         className="
-          text-[10px]
+          relative text-[10px]
           uppercase
           tracking-[0.16em]
           text-slate-500
@@ -201,9 +241,10 @@ function PerformanceCard({
 
       <p
         className={[
-          "mt-4 text-3xl",
+          "relative mt-4 text-3xl",
           "font-semibold",
           "tracking-tight",
+
           accent === "cyan"
             ? "text-cyan-300"
             : accent === "emerald"
@@ -216,7 +257,7 @@ function PerformanceCard({
 
       <p
         className="
-          mt-2 text-xs
+          relative mt-2 text-xs
           leading-5
           text-slate-500
         "
@@ -267,6 +308,13 @@ function ModelPage() {
     string | null
   >(null);
 
+  const [
+    lastRefreshedAt,
+    setLastRefreshedAt,
+  ] = useState<
+    Date | null
+  >(null);
+
 
   useEffect(() => {
     let cancelled = false;
@@ -283,9 +331,7 @@ function ModelPage() {
           getEvaluationSummary(),
         ]);
 
-        if (
-          cancelled
-        ) {
+        if (cancelled) {
           return;
         }
 
@@ -301,21 +347,21 @@ function ModelPage() {
           evaluationData,
         );
 
+        setLastRefreshedAt(
+          new Date(),
+        );
+
         setError(
           null,
         );
       } catch {
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setError(
             "SENTINEL could not load model intelligence. Confirm that the FastAPI backend is running.",
           );
         }
       } finally {
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setIsLoading(
             false,
           );
@@ -359,6 +405,10 @@ function ModelPage() {
         evaluationData,
       );
 
+      setLastRefreshedAt(
+        new Date(),
+      );
+
       setError(
         null,
       );
@@ -384,20 +434,40 @@ function ModelPage() {
             experiment.selected,
         );
 
-  const rejectedExperiment:
-    ModelExperimentEvaluation
-    | undefined =
-      evaluation
-        ?.experiments
-        .find(
-          (experiment) =>
-            !experiment.selected,
+
+  const maxRiskCount = useMemo(
+    () => {
+      if (!evaluation) {
+        return 1;
+      }
+
+      const values =
+        Object.values(
+          evaluation
+            .benchmark
+            .operational_scoring
+            .risk_distribution,
         );
 
+      return Math.max(
+        ...values,
+        1,
+      );
+    },
+    [
+      evaluation,
+    ],
+  );
 
-  if (
-    isLoading
-  ) {
+
+  const liveHasScores =
+    Boolean(
+      summary
+      && summary.events_scored > 0
+    );
+
+
+  if (isLoading) {
     return (
       <main
         className="
@@ -456,13 +526,13 @@ function ModelPage() {
           max-w-[1600px]
         "
       >
-        {/* =============================================
+        {/* ==================================================
             Header
-            ============================================= */}
+            ================================================== */}
+
         <header
           className="
-            flex flex-col
-            gap-5
+            flex flex-col gap-5
             lg:flex-row
             lg:items-end
             lg:justify-between
@@ -516,48 +586,122 @@ function ModelPage() {
                 text-slate-500
               "
             >
-              Inspect SENTINEL's
-              selected behavioral
-              anomaly detector,
-              evaluation performance,
-              feature architecture and
-              model lifecycle.
+              Inspect SENTINEL&apos;s selected
+              anomaly detector, controlled
+              benchmark evidence, model selection,
+              incident recovery and live
+              operational state.
             </p>
           </div>
 
 
-          <button
-            type="button"
-            disabled={
-              isRefreshing
-            }
-            onClick={() => {
-              void refreshModel();
-            }}
+          <div
             className="
+              flex flex-wrap
+              items-center gap-3
               self-start
-              rounded-xl
-              border border-slate-700/70
-              bg-[#121a28]
-              px-4 py-2.5
-              text-xs font-medium
-              text-slate-300
-              shadow-lg
-              transition-all
-              duration-200
-              hover:-translate-y-0.5
-              hover:border-cyan-800/70
-              hover:bg-cyan-950/20
-              hover:text-cyan-300
-              disabled:cursor-wait
-              disabled:opacity-60
               lg:self-auto
             "
           >
-            {isRefreshing
-              ? "Refreshing..."
-              : "Refresh Model"}
-          </button>
+            {lastRefreshedAt && (
+              <div
+                className="
+                  flex items-center gap-2.5
+                  rounded-xl
+                  border border-slate-800
+                  bg-[#0d1522]/85
+                  px-3.5 py-2
+                  shadow-sm
+                "
+              >
+                <span
+                  className="
+                    relative flex
+                    h-2 w-2
+                  "
+                >
+                  <span
+                    className="
+                      absolute inline-flex
+                      h-full w-full
+                      animate-ping
+                      rounded-full
+                      bg-emerald-400
+                      opacity-40
+                    "
+                  />
+
+                  <span
+                    className="
+                      relative inline-flex
+                      h-2 w-2
+                      rounded-full
+                      bg-emerald-400
+                    "
+                  />
+                </span>
+
+                <div>
+                  <p
+                    className="
+                      text-[8px]
+                      font-semibold
+                      uppercase
+                      tracking-[0.14em]
+                      text-slate-600
+                    "
+                  >
+                    Last Refreshed
+                  </p>
+
+                  <p
+                    className="
+                      mt-0.5 text-[11px]
+                      font-medium
+                      text-slate-300
+                    "
+                  >
+                    {formatRefreshTime(
+                      lastRefreshedAt,
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+
+            <button
+              type="button"
+              disabled={
+                isRefreshing
+              }
+              onClick={() => {
+                void refreshModel();
+              }}
+              className="
+                rounded-xl
+                border border-slate-700/70
+                bg-[#121a28]
+                px-4 py-2.5
+                text-xs font-medium
+                text-slate-300
+                shadow-lg
+                transition-all
+                duration-200
+                hover:-translate-y-0.5
+                hover:border-cyan-700/70
+                hover:bg-cyan-950/25
+                hover:text-cyan-300
+                hover:shadow-[0_8px_24px_rgba(6,182,212,0.08)]
+                disabled:cursor-wait
+                disabled:opacity-60
+              "
+            >
+              {isRefreshing
+                ? "Refreshing..."
+                : "Refresh Model"}
+            </button>
+          </div>
         </header>
 
 
@@ -576,9 +720,10 @@ function ModelPage() {
         )}
 
 
-        {/* =============================================
+        {/* ==================================================
             Selected Model Hero
-            ============================================= */}
+            ================================================== */}
+
         {model && (
           <section
             className="
@@ -589,6 +734,10 @@ function ModelPage() {
               bg-[#101826]/90
               p-6
               shadow-[0_16px_45px_rgba(0,0,0,0.14)]
+              transition-all
+              duration-300
+              hover:border-cyan-900/60
+              hover:shadow-[0_22px_60px_rgba(6,182,212,0.06)]
             "
           >
             <div
@@ -633,7 +782,7 @@ function ModelPage() {
                       text-emerald-300
                     "
                   >
-                    SELECTED MODEL
+                    PRODUCTION DETECTOR
                   </span>
 
                   <span
@@ -649,7 +798,7 @@ function ModelPage() {
                       text-cyan-300
                     "
                   >
-                    PRODUCTION CANDIDATE
+                    HISTORICAL PERCENTILE SCORING
                   </span>
                 </div>
 
@@ -661,8 +810,7 @@ function ModelPage() {
                     text-white
                   "
                 >
-                  Isolation Forest
-                  {" "}
+                  Isolation Forest{" "}
 
                   <span
                     className="
@@ -681,12 +829,12 @@ function ModelPage() {
                     text-slate-500
                   "
                 >
-                  Unsupervised behavioral
-                  anomaly detection trained
-                  on known-normal historical
-                  enterprise activity and
-                  evaluated chronologically
-                  against future events.
+                  Unsupervised behavioral anomaly
+                  detection trained on known-normal
+                  historical enterprise activity
+                  and evaluated chronologically
+                  against future normal and
+                  controlled attack events.
                 </p>
               </div>
 
@@ -697,110 +845,88 @@ function ModelPage() {
                   sm:grid-cols-3
                 "
               >
-                <div
-                  className="
-                    rounded-xl
-                    border border-slate-800
-                    bg-[#0b111c]
-                    px-5 py-4
-                  "
-                >
-                  <p
-                    className="
-                      text-[9px]
-                      uppercase
-                      tracking-[0.13em]
-                      text-slate-600
-                    "
-                  >
-                    Features
-                  </p>
+                {[
+                  {
+                    label:
+                      "Features",
 
-                  <p
-                    className="
-                      mt-2 text-xl
-                      font-semibold
-                      text-white
-                    "
-                  >
-                    {model.feature_count}
-                  </p>
-                </div>
+                    value:
+                      String(
+                        model.feature_count,
+                      ),
+                  },
 
-                <div
-                  className="
-                    rounded-xl
-                    border border-slate-800
-                    bg-[#0b111c]
-                    px-5 py-4
-                  "
-                >
-                  <p
-                    className="
-                      text-[9px]
-                      uppercase
-                      tracking-[0.13em]
-                      text-slate-600
-                    "
-                  >
-                    Training Rows
-                  </p>
+                  {
+                    label:
+                      "Training Rows",
 
-                  <p
-                    className="
-                      mt-2 text-xl
-                      font-semibold
-                      text-white
-                    "
-                  >
-                    {formatNumber(
-                      model.training_rows,
-                    )}
-                  </p>
-                </div>
+                    value:
+                      formatNumber(
+                        model.training_rows,
+                      ),
+                  },
 
-                <div
-                  className="
-                    rounded-xl
-                    border border-slate-800
-                    bg-[#0b111c]
-                    px-5 py-4
-                  "
-                >
-                  <p
-                    className="
-                      text-[9px]
-                      uppercase
-                      tracking-[0.13em]
-                      text-slate-600
-                    "
-                  >
-                    Threshold
-                  </p>
+                  {
+                    label:
+                      "Threshold",
 
-                  <p
-                    className="
-                      mt-2 text-xl
-                      font-semibold
-                      text-cyan-300
-                    "
-                  >
-                    {formatPercent(
-                      model
-                        .threshold_percentile,
-                      0,
-                    )}
-                  </p>
-                </div>
+                    value:
+                      formatPercent(
+                        model.threshold_percentile,
+                        0,
+                      ),
+                  },
+                ].map(
+                  (item) => (
+                    <div
+                      key={
+                        item.label
+                      }
+                      className="
+                        min-w-[130px]
+                        rounded-xl
+                        border border-slate-800
+                        bg-[#0b111c]
+                        px-5 py-4
+                        transition-all
+                        duration-300
+                        hover:-translate-y-0.5
+                        hover:border-cyan-900/60
+                      "
+                    >
+                      <p
+                        className="
+                          text-[9px]
+                          uppercase
+                          tracking-[0.13em]
+                          text-slate-600
+                        "
+                      >
+                        {item.label}
+                      </p>
+
+                      <p
+                        className="
+                          mt-2 text-xl
+                          font-semibold
+                          text-white
+                        "
+                      >
+                        {item.value}
+                      </p>
+                    </div>
+                  ),
+                )}
               </div>
             </div>
           </section>
         )}
 
 
-        {/* =============================================
-            Performance
-            ============================================= */}
+        {/* ==================================================
+            KPI Cards
+            ================================================== */}
+
         {model && (
           <section
             className="
@@ -814,7 +940,7 @@ function ModelPage() {
               value={formatPercent(
                 model.precision,
               )}
-              helper="Proportion of evaluation alerts that overlapped injected attack events."
+              helper="Share of model alerts that overlap controlled attack events."
             />
 
             <PerformanceCard
@@ -822,7 +948,7 @@ function ModelPage() {
               value={formatPercent(
                 model.recall,
               )}
-              helper="Proportion of controlled attack events detected by the selected model."
+              helper="Share of controlled attack events detected by the model."
               accent="emerald"
             />
 
@@ -831,77 +957,652 @@ function ModelPage() {
               value={formatPercent(
                 model.f1_score,
               )}
-              helper="Harmonic balance between precision and recall."
+              helper="Balance between detection coverage and alert precision."
               accent="cyan"
             />
 
             <PerformanceCard
               label="False Positive Rate"
               value={formatPercent(
-                model
-                  .false_positive_rate,
+                model.false_positive_rate,
                 2,
               )}
-              helper="Normal evaluation events that crossed the critical alert threshold."
+              helper="Normal evaluation events incorrectly crossing the alert threshold."
             />
           </section>
         )}
 
 
-        {/* =============================================
-            Experiment Comparison
-            ============================================= */}
-        <section
-          className="
-            mt-4 grid gap-4
-            xl:grid-cols-[1.1fr_0.9fr]
-          "
-        >
-          <article
+        {/* ==================================================
+            Benchmark Command Center
+            ================================================== */}
+
+        {evaluation && (
+          <section
             className="
-              rounded-2xl
-              border border-slate-700/55
-              bg-[#101826]/90
-              p-5
+              mt-4 grid gap-4
+              xl:grid-cols-[0.92fr_1.08fr]
             "
           >
-            <p
+            <article
               className="
-                text-[10px]
-                uppercase
-                tracking-[0.17em]
-                text-slate-600
+                group relative overflow-hidden
+                rounded-2xl
+                border border-slate-700/55
+                bg-[#101826]/90
+                p-6
+                transition-all
+                duration-300
+                hover:border-cyan-900/55
+                hover:shadow-[0_18px_50px_rgba(6,182,212,0.045)]
               "
             >
-              Model Selection
-            </p>
-
-            <div
-              className="
-                mt-1.5 flex
-                flex-col gap-2
-                sm:flex-row
-                sm:items-end
-                sm:justify-between
-              "
-            >
-              <h2
+              <div
                 className="
-                  text-lg
-                  font-semibold
-                  text-white
+                  pointer-events-none
+                  absolute
+                  -left-16 -top-20
+                  h-52 w-52
+                  rounded-full
+                  bg-cyan-400/[0.025]
+                  blur-[80px]
+                  transition-all
+                  duration-300
+                  group-hover:bg-cyan-400/[0.05]
+                "
+              />
+
+              <div
+                className="
+                  relative
                 "
               >
-                Experiment Comparison
-              </h2>
+                <div
+                  className="
+                    flex flex-wrap
+                    items-center
+                    justify-between
+                    gap-3
+                  "
+                >
+                  <div>
+                    <p
+                      className="
+                        text-[10px]
+                        uppercase
+                        tracking-[0.17em]
+                        text-cyan-500
+                      "
+                    >
+                      Controlled Benchmark
+                    </p>
+
+                    <h2
+                      className="
+                        mt-1.5 text-xl
+                        font-semibold
+                        text-white
+                      "
+                    >
+                      Reproducible Evaluation
+                    </h2>
+                  </div>
+
+
+                  <div
+                    className="
+                      flex flex-wrap gap-2
+                    "
+                  >
+                    <span
+                      className="
+                        rounded-full
+                        border border-emerald-900/50
+                        bg-emerald-950/20
+                        px-3 py-1.5
+                        text-[9px]
+                        font-semibold
+                        tracking-[0.12em]
+                        text-emerald-300
+                      "
+                    >
+                      {evaluation
+                        .benchmark
+                        .status}
+                    </span>
+
+                    <span
+                      className="
+                        rounded-full
+                        border border-cyan-900/50
+                        bg-cyan-950/20
+                        px-3 py-1.5
+                        text-[9px]
+                        font-semibold
+                        tracking-[0.12em]
+                        text-cyan-300
+                      "
+                    >
+                      SEED{" "}
+                      {evaluation
+                        .benchmark
+                        .seed}
+                    </span>
+
+                    <span
+                      className="
+                        rounded-full
+                        border border-slate-700
+                        bg-slate-900/50
+                        px-3 py-1.5
+                        text-[9px]
+                        font-semibold
+                        tracking-[0.12em]
+                        text-slate-400
+                      "
+                    >
+                      REPRODUCIBLE
+                    </span>
+                  </div>
+                </div>
+
+
+                <p
+                  className="
+                    mt-4 max-w-2xl
+                    text-xs leading-5
+                    text-slate-500
+                  "
+                >
+                  A fixed synthetic enterprise,
+                  deterministic attack scenarios
+                  and a fixed random seed provide
+                  repeatable evidence independent
+                  of the live operational database.
+                </p>
+
+
+                <div
+                  className="
+                    mt-6 grid gap-3
+                    sm:grid-cols-2
+                    lg:grid-cols-3
+                  "
+                >
+                  {[
+                    {
+                      label:
+                        "Employees",
+
+                      value:
+                        formatNumber(
+                          evaluation
+                            .benchmark
+                            .dataset
+                            .employees,
+                        ),
+                    },
+
+                    {
+                      label:
+                        "Total Events",
+
+                      value:
+                        formatNumber(
+                          evaluation
+                            .benchmark
+                            .dataset
+                            .total_events,
+                        ),
+                    },
+
+                    {
+                      label:
+                        "Attack Events",
+
+                      value:
+                        formatNumber(
+                          evaluation
+                            .benchmark
+                            .dataset
+                            .attack_events,
+                        ),
+                    },
+
+                    {
+                      label:
+                        "Normal Events",
+
+                      value:
+                        formatNumber(
+                          evaluation
+                            .benchmark
+                            .dataset
+                            .normal_events,
+                        ),
+                    },
+
+                    {
+                      label:
+                        "Campaigns",
+
+                      value:
+                        formatNumber(
+                          evaluation
+                            .benchmark
+                            .dataset
+                            .attack_instances,
+                        ),
+                    },
+
+                    {
+                      label:
+                        "Incidents",
+
+                      value:
+                        formatNumber(
+                          evaluation
+                            .benchmark
+                            .incident_correlation
+                            .total,
+                        ),
+                    },
+                  ].map(
+                    (item) => (
+                      <div
+                        key={
+                          item.label
+                        }
+                        className="
+                          rounded-xl
+                          border border-slate-800
+                          bg-[#0b111c]
+                          p-4
+                          transition-all
+                          duration-300
+                          hover:-translate-y-0.5
+                          hover:border-slate-700
+                          hover:bg-[#0e1724]
+                        "
+                      >
+                        <p
+                          className="
+                            text-[9px]
+                            uppercase
+                            tracking-[0.12em]
+                            text-slate-600
+                          "
+                        >
+                          {item.label}
+                        </p>
+
+                        <p
+                          className="
+                            mt-2 text-xl
+                            font-semibold
+                            text-white
+                          "
+                        >
+                          {item.value}
+                        </p>
+                      </div>
+                    ),
+                  )}
+                </div>
+
+
+                <div
+                  className="
+                    mt-4 flex flex-col
+                    gap-1 rounded-xl
+                    border border-slate-800
+                    bg-[#0b111c]/75
+                    px-4 py-3
+                    sm:flex-row
+                    sm:items-center
+                    sm:justify-between
+                  "
+                >
+                  <p
+                    className="
+                      text-[10px]
+                      text-slate-500
+                    "
+                  >
+                    {evaluation
+                      .benchmark
+                      .database_isolation}
+                  </p>
+
+                  <p
+                    className="
+                      text-[10px]
+                      text-slate-600
+                    "
+                  >
+                    Generated{" "}
+                    {formatDateTime(
+                      evaluation
+                        .benchmark
+                        .generated_at,
+                    )}
+                  </p>
+                </div>
+              </div>
+            </article>
+
+
+            {/* Risk Distribution */}
+
+            <article
+              className="
+                rounded-2xl
+                border border-slate-700/55
+                bg-[#101826]/90
+                p-6
+                transition-all
+                duration-300
+                hover:border-slate-600/70
+              "
+            >
+              <div
+                className="
+                  flex flex-col gap-2
+                  sm:flex-row
+                  sm:items-end
+                  sm:justify-between
+                "
+              >
+                <div>
+                  <p
+                    className="
+                      text-[10px]
+                      uppercase
+                      tracking-[0.17em]
+                      text-slate-600
+                    "
+                  >
+                    Benchmark Scoring
+                  </p>
+
+                  <h2
+                    className="
+                      mt-1.5 text-xl
+                      font-semibold
+                      text-white
+                    "
+                  >
+                    Risk Distribution
+                  </h2>
+                </div>
+
+                <p
+                  className="
+                    text-xs text-slate-600
+                  "
+                >
+                  {formatNumber(
+                    evaluation
+                      .benchmark
+                      .operational_scoring
+                      .scored_events,
+                  )}
+                  {" "}
+                  scored events
+                </p>
+              </div>
+
+
+              <div
+                className="
+                  mt-7 space-y-5
+                "
+              >
+                {RISK_LEVELS.map(
+                  (risk) => {
+                    const count =
+                      evaluation
+                        .benchmark
+                        .operational_scoring
+                        .risk_distribution[
+                          risk.key
+                        ]
+                      ?? 0;
+
+                    const width =
+                      Math.max(
+                        (
+                          count
+                          / maxRiskCount
+                        )
+                        * 100,
+                        count > 0
+                          ? 1.5
+                          : 0,
+                      );
+
+                    const barClass =
+                      risk.key === "CRITICAL"
+                        ? "bg-red-400"
+                        : risk.key === "HIGH"
+                          ? "bg-orange-400"
+                          : risk.key === "MEDIUM"
+                            ? "bg-amber-300"
+                            : risk.key === "LOW"
+                              ? "bg-cyan-400"
+                              : "bg-slate-500";
+
+                    return (
+                      <div
+                        key={
+                          risk.key
+                        }
+                        className="
+                          group
+                        "
+                      >
+                        <div
+                          className="
+                            mb-2 flex
+                            items-center
+                            justify-between
+                            gap-3
+                          "
+                        >
+                          <div
+                            className="
+                              flex items-center gap-2
+                            "
+                          >
+                            <span
+                              className={[
+                                "h-1.5 w-1.5",
+                                "rounded-full",
+                                barClass,
+                              ].join(" ")}
+                            />
+
+                            <span
+                              className="
+                                text-xs
+                                font-medium
+                                text-slate-400
+                              "
+                            >
+                              {risk.label}
+                            </span>
+                          </div>
+
+                          <span
+                            className="
+                              text-xs
+                              font-semibold
+                              tabular-nums
+                              text-slate-300
+                            "
+                          >
+                            {formatNumber(
+                              count,
+                            )}
+                          </span>
+                        </div>
+
+
+                        <div
+                          className="
+                            h-2 overflow-hidden
+                            rounded-full
+                            bg-slate-900
+                          "
+                        >
+                          <div
+                            style={{
+                              width:
+                                `${width}%`,
+                            }}
+                            className={[
+                              "h-full rounded-full",
+                              barClass,
+                              "opacity-70",
+                              "transition-all",
+                              "duration-500",
+                              "group-hover:opacity-100",
+                            ].join(" ")}
+                          />
+                        </div>
+                      </div>
+                    );
+                  },
+                )}
+              </div>
+
+
+              <div
+                className="
+                  mt-7 rounded-xl
+                  border border-red-950/40
+                  bg-red-950/[0.08]
+                  p-4
+                "
+              >
+                <p
+                  className="
+                    text-[9px]
+                    uppercase
+                    tracking-[0.13em]
+                    text-red-400
+                  "
+                >
+                  Critical Boundary
+                </p>
+
+                <div
+                  className="
+                    mt-2 flex
+                    items-end
+                    justify-between
+                    gap-4
+                  "
+                >
+                  <p
+                    className="
+                      text-2xl
+                      font-semibold
+                      text-red-300
+                    "
+                  >
+                    {formatNumber(
+                      evaluation
+                        .benchmark
+                        .canonical_signature
+                        .critical_scores,
+                    )}
+                  </p>
+
+                  <p
+                    className="
+                      max-w-xs text-right
+                      text-[11px]
+                      leading-5
+                      text-slate-600
+                    "
+                  >
+                    Events reaching the selected
+                    critical anomaly boundary.
+                  </p>
+                </div>
+              </div>
+            </article>
+          </section>
+        )}
+
+
+        {/* ==================================================
+            Model Selection Arena
+            ================================================== */}
+
+        {evaluation && (
+          <section
+            className="
+              mt-4 rounded-2xl
+              border border-slate-700/55
+              bg-[#101826]/90
+              p-6
+            "
+          >
+            <div
+              className="
+                flex flex-col gap-3
+                md:flex-row
+                md:items-end
+                md:justify-between
+              "
+            >
+              <div>
+                <p
+                  className="
+                    text-[10px]
+                    uppercase
+                    tracking-[0.17em]
+                    text-slate-600
+                  "
+                >
+                  Model Selection Arena
+                </p>
+
+                <h2
+                  className="
+                    mt-1.5 text-xl
+                    font-semibold
+                    text-white
+                  "
+                >
+                  V1 vs V2
+                </h2>
+
+                <p
+                  className="
+                    mt-2 max-w-2xl
+                    text-xs leading-5
+                    text-slate-500
+                  "
+                >
+                  Both candidates were retrained
+                  against the same chronological
+                  benchmark before objective model
+                  selection.
+                </p>
+              </div>
 
               <p
                 className="
-                  text-xs
+                  text-[10px]
+                  uppercase
+                  tracking-[0.13em]
                   text-slate-600
                 "
               >
-                Evidence-based model selection
+                F1 → Precision → Fewer Features
               </p>
             </div>
 
@@ -909,615 +1610,988 @@ function ModelPage() {
             <div
               className="
                 mt-6 grid gap-4
-                md:grid-cols-2
+                lg:grid-cols-2
               "
             >
-              {/* V1 */}
+              {evaluation
+                .experiments
+                .map(
+                  (experiment) => (
+                    <article
+                      key={
+                        experiment.name
+                      }
+                      className={[
+                        "group relative overflow-hidden",
+                        "rounded-2xl border p-5",
+                        "transition-all duration-300",
+                        "hover:-translate-y-1",
+
+                        experiment.selected
+                          ? (
+                            "border-emerald-900/55 "
+                            + "bg-emerald-950/[0.08] "
+                            + "hover:border-emerald-700/60 "
+                            + "hover:shadow-[0_20px_50px_rgba(16,185,129,0.07)]"
+                          )
+                          : (
+                            "border-slate-800 "
+                            + "bg-[#0b111c] "
+                            + "hover:border-cyan-900/45 "
+                            + "hover:shadow-[0_20px_50px_rgba(6,182,212,0.04)]"
+                          ),
+                      ].join(" ")}
+                    >
+                      {experiment.selected && (
+                        <div
+                          className="
+                            pointer-events-none
+                            absolute
+                            -right-14 -top-20
+                            h-52 w-52
+                            rounded-full
+                            bg-emerald-400/[0.035]
+                            blur-[80px]
+                          "
+                        />
+                      )}
+
+                      <div
+                        className="
+                          relative
+                        "
+                      >
+                        <div
+                          className="
+                            flex items-start
+                            justify-between
+                            gap-4
+                          "
+                        >
+                          <div>
+                            <p
+                              className={[
+                                "text-[9px]",
+                                "font-semibold",
+                                "uppercase",
+                                "tracking-[0.14em]",
+
+                                experiment.selected
+                                  ? "text-emerald-400"
+                                  : "text-slate-600",
+                              ].join(" ")}
+                            >
+                              {experiment.selected
+                                ? "Selected Experiment"
+                                : "Candidate Experiment"}
+                            </p>
+
+                            <h3
+                              className="
+                                mt-2 text-2xl
+                                font-semibold
+                                tracking-tight
+                                text-white
+                              "
+                            >
+                              {experiment.name}
+                            </h3>
+
+                            <p
+                              className="
+                                mt-1 text-xs
+                                text-slate-600
+                              "
+                            >
+                              {experiment.version}
+                            </p>
+                          </div>
+
+                          <span
+                            className={[
+                              "rounded-lg border",
+                              "px-3 py-1.5",
+                              "text-[9px]",
+                              "font-semibold",
+                              "tracking-[0.1em]",
+
+                              experiment.selected
+                                ? (
+                                  "border-emerald-800/60 "
+                                  + "bg-emerald-950/30 "
+                                  + "text-emerald-300"
+                                )
+                                : (
+                                  "border-slate-700 "
+                                  + "bg-slate-900/50 "
+                                  + "text-slate-500"
+                                ),
+                            ].join(" ")}
+                          >
+                            {experiment.selected
+                              ? "WINNER"
+                              : "REJECTED"}
+                          </span>
+                        </div>
+
+
+                        <div
+                          className="
+                            mt-6 grid gap-3
+                            grid-cols-2
+                            sm:grid-cols-4
+                          "
+                        >
+                          {[
+                            {
+                              label:
+                                "Precision",
+
+                              value:
+                                formatPercent(
+                                  experiment
+                                    .precision,
+                                ),
+                            },
+
+                            {
+                              label:
+                                "Recall",
+
+                              value:
+                                formatPercent(
+                                  experiment
+                                    .recall,
+                                ),
+                            },
+
+                            {
+                              label:
+                                "F1 Score",
+
+                              value:
+                                formatPercent(
+                                  experiment
+                                    .f1_score,
+                                ),
+                            },
+
+                            {
+                              label:
+                                "Features",
+
+                              value:
+                                String(
+                                  experiment
+                                    .feature_count,
+                                ),
+                            },
+                          ].map(
+                            (metric) => (
+                              <div
+                                key={
+                                  metric.label
+                                }
+                                className="
+                                  rounded-xl
+                                  border border-slate-800
+                                  bg-slate-950/30
+                                  p-3
+                                "
+                              >
+                                <p
+                                  className="
+                                    text-[8px]
+                                    uppercase
+                                    tracking-[0.12em]
+                                    text-slate-600
+                                  "
+                                >
+                                  {metric.label}
+                                </p>
+
+                                <p
+                                  className="
+                                    mt-2 text-base
+                                    font-semibold
+                                    text-slate-200
+                                  "
+                                >
+                                  {metric.value}
+                                </p>
+                              </div>
+                            ),
+                          )}
+                        </div>
+
+
+                        <div
+                          className="
+                            mt-4 flex
+                            flex-wrap gap-4
+                            border-t
+                            border-slate-800/80
+                            pt-4
+                          "
+                        >
+                          <p
+                            className="
+                              text-[11px]
+                              text-slate-500
+                            "
+                          >
+                            Alerts{" "}
+                            <span
+                              className="
+                                font-semibold
+                                text-slate-300
+                              "
+                            >
+                              {formatNumber(
+                                experiment.alerts,
+                              )}
+                            </span>
+                          </p>
+
+                          <p
+                            className="
+                              text-[11px]
+                              text-slate-500
+                            "
+                          >
+                            False positives{" "}
+                            <span
+                              className="
+                                font-semibold
+                                text-slate-300
+                              "
+                            >
+                              {formatNumber(
+                                experiment
+                                  .false_positives,
+                              )}
+                            </span>
+                          </p>
+
+                          <p
+                            className="
+                              text-[11px]
+                              text-slate-500
+                            "
+                          >
+                            FPR{" "}
+                            <span
+                              className="
+                                font-semibold
+                                text-slate-300
+                              "
+                            >
+                              {formatPercent(
+                                experiment
+                                  .false_positive_rate,
+                                2,
+                              )}
+                            </span>
+                          </p>
+                        </div>
+
+
+                        <p
+                          className="
+                            mt-4 text-xs
+                            leading-5
+                            text-slate-500
+                          "
+                        >
+                          {experiment.decision}
+                        </p>
+                      </div>
+                    </article>
+                  ),
+                )}
+            </div>
+
+
+            {selectedExperiment && (
               <div
                 className="
-                  relative overflow-hidden
-                  rounded-xl
-                  border
-                  border-emerald-900/50
-                  bg-emerald-950/10
-                  p-5
-                  transition-all
-                  duration-300
-                  hover:-translate-y-0.5
-                  hover:border-emerald-800/60
+                  mt-4 rounded-xl
+                  border border-cyan-950/50
+                  bg-gradient-to-r
+                  from-cyan-950/[0.14]
+                  to-transparent
+                  p-4
                 "
               >
-                <div
+                <p
                   className="
-                    flex items-center
-                    justify-between
-                    gap-3
+                    text-[9px]
+                    uppercase
+                    tracking-[0.14em]
+                    text-cyan-500
                   "
                 >
-                  <div>
-                    <p
-                      className="
-                        text-[10px]
-                        uppercase
-                        tracking-[0.13em]
-                        text-emerald-400
-                      "
-                    >
-                      Selected
-                    </p>
-
-                    <h3
-                      className="
-                        mt-1 text-lg
-                        font-semibold
-                        text-white
-                      "
-                    >
-                      V1 / V1.1
-                    </h3>
-                  </div>
-
-                  <span
-                    className="
-                      rounded-lg
-                      border
-                      border-emerald-800/50
-                      bg-emerald-950/30
-                      px-2.5 py-1.5
-                      text-[9px]
-                      font-semibold
-                      text-emerald-300
-                    "
-                  >
-                    WINNER
-                  </span>
-                </div>
-
-
-                <div
-                  className="
-                    mt-5 grid
-                    grid-cols-3 gap-3
-                  "
-                >
-                  <div>
-                    <p
-                      className="
-                        text-[9px]
-                        uppercase
-                        tracking-[0.1em]
-                        text-slate-600
-                      "
-                    >
-                      Features
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-slate-200
-                      "
-                    >
-                      {selectedExperiment
-                        ?.feature_count
-                        ?? "—"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p
-                      className="
-                        text-[9px]
-                        uppercase
-                        tracking-[0.1em]
-                        text-slate-600
-                      "
-                    >
-                      Recall
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-slate-200
-                      "
-                    >
-                      {selectedExperiment
-                        ? formatPercent(
-                            selectedExperiment
-                              .recall,
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p
-                      className="
-                        text-[9px]
-                        uppercase
-                        tracking-[0.1em]
-                        text-slate-600
-                      "
-                    >
-                      F1
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-emerald-300
-                      "
-                    >
-                      {selectedExperiment
-                        ? formatPercent(
-                            selectedExperiment
-                              .f1_score,
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-                </div>
-
+                  Final Selection
+                </p>
 
                 <p
                   className="
-                    mt-5 text-xs
-                    leading-5
-                    text-slate-500
+                    mt-2 text-sm
+                    leading-6
+                    text-slate-300
                   "
                 >
-                  {selectedExperiment
-                    ?.decision
-                    ?? "Selected model evaluation metadata unavailable."}
+                  {selectedExperiment.name}
+                  {" was promoted because it "}
+                  delivered the strongest overall
+                  balance of precision and F1 while
+                  retaining a compact feature set
+                  and fewer false-positive alerts.
+                  V2 achieved slightly higher
+                  recall, but not enough to
+                  outperform V1 on the benchmark
+                  selection criteria.
                 </p>
               </div>
+            )}
+          </section>
+        )}
 
 
-              {/* V2 */}
-              <div
-                className="
-                  rounded-xl
-                  border border-slate-800
-                  bg-[#0b111c]
-                  p-5
-                  transition-all
-                  duration-300
-                  hover:-translate-y-0.5
-                  hover:border-slate-700
-                "
-              >
-                <div
-                  className="
-                    flex items-center
-                    justify-between
-                    gap-3
-                  "
-                >
-                  <div>
-                    <p
-                      className="
-                        text-[10px]
-                        uppercase
-                        tracking-[0.13em]
-                        text-slate-600
-                      "
-                    >
-                      Experiment
-                    </p>
+        {/* ==================================================
+            Evaluation Journey
+            ================================================== */}
 
-                    <h3
-                      className="
-                        mt-1 text-lg
-                        font-semibold
-                        text-white
-                      "
-                    >
-                      V2
-                    </h3>
-                  </div>
-
-                  <span
-                    className="
-                      rounded-lg
-                      border border-slate-700
-                      bg-slate-900/50
-                      px-2.5 py-1.5
-                      text-[9px]
-                      font-semibold
-                      text-slate-500
-                    "
-                  >
-                    REJECTED
-                  </span>
-                </div>
-
-
-                <div
-                  className="
-                    mt-5 grid
-                    grid-cols-3 gap-3
-                  "
-                >
-                  <div>
-                    <p
-                      className="
-                        text-[9px]
-                        uppercase
-                        tracking-[0.1em]
-                        text-slate-600
-                      "
-                    >
-                      Features
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-slate-200
-                      "
-                    >
-                      {rejectedExperiment
-                        ?.feature_count
-                        ?? "—"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p
-                      className="
-                        text-[9px]
-                        uppercase
-                        tracking-[0.1em]
-                        text-slate-600
-                      "
-                    >
-                      Recall
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-slate-200
-                      "
-                    >
-                      {rejectedExperiment
-                        ? formatPercent(
-                            rejectedExperiment
-                              .recall,
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p
-                      className="
-                        text-[9px]
-                        uppercase
-                        tracking-[0.1em]
-                        text-slate-600
-                      "
-                    >
-                      F1
-                    </p>
-
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-slate-400
-                      "
-                    >
-                      {rejectedExperiment
-                        ? formatPercent(
-                            rejectedExperiment
-                              .f1_score,
-                          )
-                        : "—"}
-                    </p>
-                  </div>
-                </div>
-
-
+        {evaluation && model && (
+          <section
+            className="
+              mt-4 rounded-2xl
+              border border-slate-700/55
+              bg-[#101826]/90
+              p-6
+            "
+          >
+            <div
+              className="
+                flex flex-col gap-2
+                sm:flex-row
+                sm:items-end
+                sm:justify-between
+              "
+            >
+              <div>
                 <p
                   className="
-                    mt-5 text-xs
-                    leading-5
-                    text-slate-500
+                    text-[10px]
+                    uppercase
+                    tracking-[0.17em]
+                    text-slate-600
                   "
                 >
-                  {rejectedExperiment
-                    ?.decision
-                    ?? "Experiment evaluation metadata unavailable."}
+                  Evaluation Journey
                 </p>
+
+                <h2
+                  className="
+                    mt-1.5 text-xl
+                    font-semibold
+                    text-white
+                  "
+                >
+                  From Historical Baseline
+                  to Production Detector
+                </h2>
               </div>
+
+              <p
+                className="
+                  text-xs
+                  text-slate-600
+                "
+              >
+                Chronological, not random
+              </p>
+            </div>
+
+
+            <div
+              className="
+                mt-7 grid gap-3
+                md:grid-cols-3
+                xl:grid-cols-6
+              "
+            >
+              {[
+                {
+                  number: "01",
+                  title: "Train",
+                  main:
+                    evaluation
+                      .provenance
+                      .ml_training_period,
+
+                  detail:
+                    `${formatNumber(
+                      model.training_rows,
+                    )} known-normal rows`,
+                },
+
+                {
+                  number: "02",
+                  title: "Evaluate",
+                  main:
+                    evaluation
+                      .provenance
+                      .ml_evaluation_period,
+
+                  detail:
+                    `${formatNumber(
+                      model.evaluation_rows,
+                    )} future rows`,
+                },
+
+                {
+                  number: "03",
+                  title: "Compare",
+                  main:
+                    "V1 vs V2",
+
+                  detail:
+                    "Same controlled benchmark",
+                },
+
+                {
+                  number: "04",
+                  title: "Select",
+                  main:
+                    selectedExperiment
+                      ?.name
+                    ?? "V1",
+
+                  detail:
+                    "Objective metric hierarchy",
+                },
+
+                {
+                  number: "05",
+                  title: "Version",
+                  main:
+                    `v${model.model_version}`,
+
+                  detail:
+                    "Frozen production artifact",
+                },
+
+                {
+                  number: "06",
+                  title: "Score",
+                  main:
+                    formatNumber(
+                      evaluation
+                        .benchmark
+                        .operational_scoring
+                        .scored_events,
+                    ),
+
+                  detail:
+                    "Controlled benchmark scores",
+                },
+              ].map(
+                (
+                  stage,
+                  index,
+                ) => (
+                  <div
+                    key={
+                      stage.number
+                    }
+                    className="
+                      group relative
+                    "
+                  >
+                    <div
+                      className="
+                        h-full rounded-xl
+                        border border-slate-800
+                        bg-[#0b111c]
+                        p-4
+                        transition-all
+                        duration-300
+                        hover:-translate-y-1
+                        hover:border-cyan-900/55
+                        hover:bg-[#0e1724]
+                        hover:shadow-[0_12px_28px_rgba(6,182,212,0.04)]
+                      "
+                    >
+                      <span
+                        className="
+                          text-[9px]
+                          font-semibold
+                          tracking-[0.13em]
+                          text-cyan-500
+                        "
+                      >
+                        {stage.number}
+                      </span>
+
+                      <p
+                        className="
+                          mt-3 text-sm
+                          font-semibold
+                          text-slate-200
+                        "
+                      >
+                        {stage.title}
+                      </p>
+
+                      <p
+                        className="
+                          mt-2 text-xs
+                          font-medium
+                          text-slate-400
+                        "
+                      >
+                        {stage.main}
+                      </p>
+
+                      <p
+                        className="
+                          mt-2 text-[10px]
+                          leading-4
+                          text-slate-600
+                        "
+                      >
+                        {stage.detail}
+                      </p>
+                    </div>
+
+                    {index < 5 && (
+                      <div
+                        className="
+                          absolute
+                          -right-2
+                          top-1/2
+                          z-10 hidden
+                          h-px w-4
+                          bg-cyan-900/45
+                          xl:block
+                        "
+                      />
+                    )}
+                  </div>
+                ),
+              )}
             </div>
 
 
             <div
               className="
                 mt-4 rounded-xl
-                border border-cyan-950/45
-                bg-cyan-950/10
+                border border-slate-800
+                bg-[#0b111c]/70
                 p-4
               "
             >
-              <p
-                className="
-                  text-[9px]
-                  uppercase
-                  tracking-[0.13em]
-                  text-cyan-500
-                "
-              >
-                Selection Decision
-              </p>
-
-              <p
-                className="
-                  mt-2 text-xs
-                  leading-5
-                  text-slate-400
-                "
-              >
-                Additional features were
-                not assumed to improve the
-                detector. SENTINEL retained
-                the simpler V1 feature set
-                because controlled
-                experimentation showed
-                stronger precision and F1
-                with identical recall.
-              </p>
-            </div>
-          </article>
-
-
-          {/* Training Strategy */}
-          <article
-            className="
-              rounded-2xl
-              border border-slate-700/55
-              bg-[#101826]/90
-              p-5
-            "
-          >
-            <p
-              className="
-                text-[10px]
-                uppercase
-                tracking-[0.17em]
-                text-slate-600
-              "
-            >
-              Experimental Design
-            </p>
-
-            <h2
-              className="
-                mt-1.5 text-lg
-                font-semibold
-                text-white
-              "
-            >
-              Chronological Evaluation
-            </h2>
-
-            <p
-              className="
-                mt-2 text-xs
-                leading-5
-                text-slate-500
-              "
-            >
-              SENTINEL avoids a random
-              train/test split because
-              security telemetry is
-              temporal. The detector learns
-              historical normal behavior
-              before evaluating future
-              activity.
-            </p>
-
-
-            <div
-              className="
-                mt-6
-              "
-            >
               <div
                 className="
-                  rounded-xl
-                  border border-emerald-900/45
-                  bg-emerald-950/10
-                  p-4
+                  flex items-start gap-3
                 "
               >
-                <div
+                <span
                   className="
-                    flex items-center
-                    justify-between
-                    gap-3
+                    mt-1 h-2 w-2
+                    shrink-0
+                    rounded-full
+                    bg-cyan-400
+                    shadow-[0_0_10px_rgba(34,211,238,0.5)]
                   "
-                >
-                  <div>
-                    <p
-                      className="
-                        text-[9px]
-                        uppercase
-                        tracking-[0.13em]
-                        text-emerald-400
-                      "
-                    >
-                      Training Baseline
-                    </p>
+                />
 
-                    <p
-                      className="
-                        mt-1 text-sm
-                        font-semibold
-                        text-white
-                      "
-                    >
-                      Aug 24, 2026
-                    </p>
-                  </div>
+                <div>
+                  <p
+                    className="
+                      text-[9px]
+                      uppercase
+                      tracking-[0.13em]
+                      text-slate-600
+                    "
+                  >
+                    Ground Truth Isolation
+                  </p>
 
                   <p
                     className="
-                      text-sm
-                      font-semibold
-                      text-slate-300
+                      mt-1.5 text-xs
+                      leading-5
+                      text-slate-400
                     "
                   >
-                    {model
-                      ? formatNumber(
-                          model.training_rows,
-                        )
-                      : "1,938"}
+                    {evaluation
+                      .provenance
+                      .ground_truth_policy}
                   </p>
                 </div>
-
-                <p
-                  className="
-                    mt-3 text-xs
-                    text-slate-500
-                  "
-                >
-                  Known-normal historical
-                  behavior only.
-                </p>
               </div>
+            </div>
+          </section>
+        )}
 
 
+        {/* ==================================================
+            Incident Intelligence
+            ================================================== */}
+
+        {evaluation && (
+          <section
+            className="
+              mt-4 grid gap-4
+              xl:grid-cols-[1.15fr_0.85fr]
+            "
+          >
+            <article
+              className="
+                relative overflow-hidden
+                rounded-2xl
+                border border-slate-700/55
+                bg-[#101826]/90
+                p-6
+              "
+            >
               <div
                 className="
-                  mx-auto h-8 w-px
-                  bg-gradient-to-b
-                  from-emerald-800/60
-                  to-cyan-900/60
+                  pointer-events-none
+                  absolute
+                  -right-20 -bottom-20
+                  h-64 w-64
+                  rounded-full
+                  bg-emerald-400/[0.025]
+                  blur-[90px]
                 "
               />
 
-
               <div
                 className="
-                  rounded-xl
-                  border border-cyan-900/45
-                  bg-cyan-950/10
-                  p-4
+                  relative
                 "
               >
-                <div
+                <p
                   className="
-                    flex items-center
-                    justify-between
-                    gap-3
+                    text-[10px]
+                    uppercase
+                    tracking-[0.17em]
+                    text-emerald-500
                   "
                 >
-                  <div>
+                  Incident Intelligence
+                </p>
+
+                <h2
+                  className="
+                    mt-1.5 text-xl
+                    font-semibold
+                    text-white
+                  "
+                >
+                  Correlation Recovery
+                </h2>
+
+                <p
+                  className="
+                    mt-2 max-w-xl
+                    text-xs leading-5
+                    text-slate-500
+                  "
+                >
+                  Individual anomaly detections
+                  are correlated into attack
+                  timelines and evaluated against
+                  hidden controlled scenarios.
+                </p>
+
+
+                <div
+                  className="
+                    mt-6 grid gap-4
+                    sm:grid-cols-2
+                  "
+                >
+                  <div
+                    className="
+                      group rounded-2xl
+                      border border-emerald-900/40
+                      bg-emerald-950/[0.08]
+                      p-5
+                      transition-all
+                      duration-300
+                      hover:-translate-y-1
+                      hover:border-emerald-800/55
+                      hover:shadow-[0_16px_40px_rgba(16,185,129,0.05)]
+                    "
+                  >
                     <p
                       className="
                         text-[9px]
                         uppercase
                         tracking-[0.13em]
-                        text-cyan-400
+                        text-emerald-500
                       "
                     >
-                      Future Evaluation
+                      Campaign Recovery
                     </p>
 
                     <p
                       className="
-                        mt-1 text-sm
+                        mt-3 text-4xl
                         font-semibold
-                        text-white
+                        tracking-tight
+                        text-emerald-300
                       "
                     >
-                      Aug 25–26, 2026
+                      {evaluation
+                        .incident_evaluation
+                        .attack_instances_detected}
+                      /
+                      {evaluation
+                        .incident_evaluation
+                        .attack_instances_total}
+                    </p>
+
+                    <p
+                      className="
+                        mt-3 text-xs
+                        leading-5
+                        text-slate-500
+                      "
+                    >
+                      Controlled attack campaigns
+                      recovered through incident
+                      correlation.
                     </p>
                   </div>
 
-                  <p
+
+                  <div
                     className="
-                      text-sm
-                      font-semibold
-                      text-slate-300
+                      group rounded-2xl
+                      border border-cyan-900/40
+                      bg-cyan-950/[0.08]
+                      p-5
+                      transition-all
+                      duration-300
+                      hover:-translate-y-1
+                      hover:border-cyan-800/55
+                      hover:shadow-[0_16px_40px_rgba(6,182,212,0.05)]
                     "
                   >
-                    {model
-                      ? formatNumber(
-                          model.evaluation_rows,
-                        )
-                      : "4,030"}
-                  </p>
+                    <p
+                      className="
+                        text-[9px]
+                        uppercase
+                        tracking-[0.13em]
+                        text-cyan-500
+                      "
+                    >
+                      Timeline Recovery
+                    </p>
+
+                    <p
+                      className="
+                        mt-3 text-4xl
+                        font-semibold
+                        tracking-tight
+                        text-cyan-300
+                      "
+                    >
+                      {evaluation
+                        .incident_evaluation
+                        .timeline_events_recovered}
+                      /
+                      {evaluation
+                        .incident_evaluation
+                        .timeline_events_total}
+                    </p>
+
+                    <p
+                      className="
+                        mt-3 text-xs
+                        leading-5
+                        text-slate-500
+                      "
+                    >
+                      Injected attack events
+                      represented across recovered
+                      incident timelines.
+                    </p>
+                  </div>
                 </div>
-
-                <p
-                  className="
-                    mt-3 text-xs
-                    text-slate-500
-                  "
-                >
-                  Future normal and
-                  controlled attack traffic.
-                </p>
               </div>
-            </div>
+            </article>
 
 
-            <div
+            <article
               className="
-                mt-5 rounded-xl
-                border border-slate-800
-                bg-[#0b111c]
-                p-4
+                rounded-2xl
+                border border-slate-700/55
+                bg-[#101826]/90
+                p-6
               "
             >
               <p
                 className="
-                  text-[9px]
+                  text-[10px]
                   uppercase
-                  tracking-[0.13em]
+                  tracking-[0.17em]
                   text-slate-600
                 "
               >
-                Ground Truth Policy
+                Incident Metrics
               </p>
 
-              <p
+              <h2
                 className="
-                  mt-2 text-xs
-                  leading-5
-                  text-slate-400
+                  mt-1.5 text-xl
+                  font-semibold
+                  text-white
                 "
               >
-                Simulator attack labels
-                are used only after scoring
-                for evaluation. They never
-                enter model features or
-                model fitting.
-              </p>
-            </div>
-          </article>
-        </section>
+                Correlation Quality
+              </h2>
 
 
-        {/* =============================================
+              <div
+                className="
+                  mt-6 grid gap-3
+                  sm:grid-cols-2
+                "
+              >
+                {[
+                  {
+                    label:
+                      "Precision",
+
+                    value:
+                      formatPercent(
+                        evaluation
+                          .incident_evaluation
+                          .precision,
+                      ),
+                  },
+
+                  {
+                    label:
+                      "Recall",
+
+                    value:
+                      formatPercent(
+                        evaluation
+                          .incident_evaluation
+                          .recall,
+                      ),
+                  },
+
+                  {
+                    label:
+                      "F1 Score",
+
+                    value:
+                      formatPercent(
+                        evaluation
+                          .incident_evaluation
+                          .f1_score,
+                      ),
+                  },
+
+                  {
+                    label:
+                      "Timeline Rate",
+
+                    value:
+                      formatPercent(
+                        evaluation
+                          .incident_evaluation
+                          .timeline_recovery_rate,
+                      ),
+                  },
+
+                  {
+                    label:
+                      "True Positive Incidents",
+
+                    value:
+                      formatNumber(
+                        evaluation
+                          .incident_evaluation
+                          .true_positive_incidents,
+                      ),
+                  },
+
+                  {
+                    label:
+                      "False Positive Incidents",
+
+                    value:
+                      formatNumber(
+                        evaluation
+                          .incident_evaluation
+                          .false_positive_incidents,
+                      ),
+                  },
+                ].map(
+                  (metric) => (
+                    <div
+                      key={
+                        metric.label
+                      }
+                      className="
+                        rounded-xl
+                        border border-slate-800
+                        bg-[#0b111c]
+                        p-4
+                        transition-all
+                        duration-300
+                        hover:-translate-y-0.5
+                        hover:border-slate-700
+                      "
+                    >
+                      <p
+                        className="
+                          text-[8px]
+                          uppercase
+                          tracking-[0.12em]
+                          text-slate-600
+                        "
+                      >
+                        {metric.label}
+                      </p>
+
+                      <p
+                        className="
+                          mt-2 text-lg
+                          font-semibold
+                          text-slate-200
+                        "
+                      >
+                        {metric.value}
+                      </p>
+                    </div>
+                  ),
+                )}
+              </div>
+            </article>
+          </section>
+        )}
+
+
+        {/* ==================================================
             Feature Architecture
-            ============================================= */}
+            ================================================== */}
+
         <section
           className="
             mt-4 rounded-2xl
             border border-slate-700/55
             bg-[#101826]/90
-            p-5
+            p-6
           "
         >
           <div
@@ -1542,13 +2616,27 @@ function ModelPage() {
 
               <h2
                 className="
-                  mt-1.5 text-lg
+                  mt-1.5 text-xl
                   font-semibold
                   text-white
                 "
               >
                 Behavioral Feature Architecture
               </h2>
+
+              <p
+                className="
+                  mt-2 max-w-2xl
+                  text-xs leading-5
+                  text-slate-500
+                "
+              >
+                The selected detector combines
+                temporal, identity, transfer,
+                rolling-window and network
+                behavior without using simulator
+                ground-truth labels.
+              </p>
             </div>
 
             <p
@@ -1556,9 +2644,11 @@ function ModelPage() {
                 text-xs text-slate-600
               "
             >
-              {V1_FEATURES.length}
+              {model
+                ?.feature_count
+                ?? 17}
               {" "}
-              selected production features
+              production features
             </p>
           </div>
 
@@ -1571,76 +2661,134 @@ function ModelPage() {
             "
           >
             {FEATURE_GROUPS.map(
-              (group) => (
+              (
+                group,
+                index,
+              ) => (
                 <div
                   key={
                     group.title
                   }
                   className="
-                    group rounded-xl
+                    group relative
+                    overflow-hidden
+                    rounded-xl
                     border border-slate-800
                     bg-[#0b111c]
                     p-4
                     transition-all
                     duration-300
                     hover:-translate-y-1
-                    hover:border-cyan-900/45
-                    hover:bg-[#111a28]
+                    hover:border-cyan-900/55
+                    hover:bg-[#0e1724]
+                    hover:shadow-[0_14px_32px_rgba(6,182,212,0.04)]
                   "
                 >
-                  <p
+                  <div
                     className="
-                      text-sm
-                      font-semibold
-                      text-slate-200
+                      pointer-events-none
+                      absolute
+                      -right-8 -top-8
+                      h-20 w-20
+                      rounded-full
+                      bg-cyan-400/[0.025]
+                      blur-2xl
+                      transition-all
+                      duration-300
+                      group-hover:bg-cyan-400/[0.07]
                     "
-                  >
-                    {group.title}
-                  </p>
-
-                  <p
-                    className="
-                      mt-2 text-[11px]
-                      leading-5
-                      text-slate-600
-                    "
-                  >
-                    {group.description}
-                  </p>
+                  />
 
                   <div
                     className="
-                      mt-4 flex
-                      flex-wrap gap-1.5
+                      relative
                     "
                   >
-                    {group.features.map(
-                      (feature) => (
-                        <span
-                          key={
-                            feature
-                          }
-                          title={
-                            feature
-                          }
-                          className="
-                            rounded-md
-                            border border-slate-800
-                            bg-slate-950/50
-                            px-2 py-1
-                            text-[9px]
-                            text-slate-500
-                            transition-colors
-                            group-hover:border-slate-700
-                            group-hover:text-slate-400
-                          "
-                        >
-                          {formatFeatureName(
-                            feature,
-                          )}
-                        </span>
-                      ),
-                    )}
+                    <div
+                      className="
+                        flex items-center gap-2
+                      "
+                    >
+                      <span
+                        className="
+                          flex h-6 w-6
+                          items-center
+                          justify-center
+                          rounded-lg
+                          border border-cyan-950/60
+                          bg-cyan-950/20
+                          text-[8px]
+                          font-semibold
+                          text-cyan-400
+                        "
+                      >
+                        {String(
+                          index + 1,
+                        ).padStart(
+                          2,
+                          "0",
+                        )}
+                      </span>
+
+                      <p
+                        className="
+                          text-sm
+                          font-semibold
+                          text-slate-200
+                        "
+                      >
+                        {group.title}
+                      </p>
+                    </div>
+
+                    <p
+                      className="
+                        mt-3 min-h-[40px]
+                        text-[11px]
+                        leading-5
+                        text-slate-600
+                      "
+                    >
+                      {group.description}
+                    </p>
+
+                    <div
+                      className="
+                        mt-4 flex
+                        flex-wrap gap-1.5
+                      "
+                    >
+                      {group.features.map(
+                        (feature) => (
+                          <span
+                            key={
+                              feature
+                            }
+                            title={
+                              feature
+                            }
+                            className="
+                              rounded-md
+                              border border-slate-800
+                              bg-slate-950/50
+                              px-2 py-1
+                              text-[9px]
+                              text-slate-500
+                              transition-all
+                              duration-200
+                              group-hover:border-slate-700
+                              group-hover:text-slate-400
+                              hover:!border-cyan-900/60
+                              hover:!text-cyan-300
+                            "
+                          >
+                            {formatFeatureName(
+                              feature,
+                            )}
+                          </span>
+                        ),
+                      )}
+                    </div>
                   </div>
                 </div>
               ),
@@ -1649,332 +2797,249 @@ function ModelPage() {
         </section>
 
 
-        {/* =============================================
-            Model Lifecycle
-            ============================================= */}
+        {/* ==================================================
+            Live Operational State
+            ================================================== */}
+
         <section
           className="
-            mt-4 rounded-2xl
+            relative mt-4
+            overflow-hidden
+            rounded-2xl
             border border-slate-700/55
             bg-[#101826]/90
             p-5
           "
         >
-          <p
+          <div
             className="
-              text-[10px]
-              uppercase
-              tracking-[0.17em]
-              text-slate-600
+              pointer-events-none
+              absolute
+              -right-20 -top-24
+              h-64 w-64
+              rounded-full
+              bg-emerald-400/[0.025]
+              blur-[100px]
             "
-          >
-            Model Lifecycle
-          </p>
-
-          <h2
-            className="
-              mt-1.5 text-lg
-              font-semibold
-              text-white
-            "
-          >
-            Production Detection Pipeline
-          </h2>
-
+          />
 
           <div
             className="
-              mt-6 grid gap-3
-              md:grid-cols-3
-              xl:grid-cols-6
+              relative flex
+              flex-col gap-5
+              xl:flex-row
+              xl:items-center
+              xl:justify-between
             "
           >
-            {[
-              {
-                number: "01",
-                title: "Dataset",
-                detail:
-                  "5,970 engineered event rows",
-              },
-
-              {
-                number: "02",
-                title: "Experiment",
-                detail:
-                  "V1 and V2 feature sets",
-              },
-
-              {
-                number: "03",
-                title: "Evaluate",
-                detail:
-                  "Chronological future test",
-              },
-
-              {
-                number: "04",
-                title: "Select",
-                detail:
-                  "V1 wins on F1 and precision",
-              },
-
-              {
-                number: "05",
-                title: "Version",
-                detail:
-                  "Frozen V1.1 model artifact",
-              },
-
-              {
-                number: "06",
-                title: "Operationalize",
-                detail:
-                  "5,970 persisted ML scores",
-              },
-            ].map(
-              (
-                stage,
-                index,
-              ) => (
-                <div
-                  key={
-                    stage.number
-                  }
+            <div>
+              <div
+                className="
+                  flex items-center gap-2
+                "
+              >
+                <span
                   className="
-                    relative
+                    relative flex h-2 w-2
                   "
                 >
-                  <div
-                    className="
-                      group h-full
-                      rounded-xl
-                      border border-slate-800
-                      bg-[#0b111c]
-                      p-4
-                      transition-all
-                      duration-300
-                      hover:-translate-y-1
-                      hover:border-cyan-900/45
-                      hover:bg-[#111a28]
-                    "
-                  >
+                  {liveHasScores && (
                     <span
                       className="
-                        text-[9px]
-                        font-semibold
-                        tracking-[0.12em]
-                        text-cyan-500
-                      "
-                    >
-                      {stage.number}
-                    </span>
-
-                    <p
-                      className="
-                        mt-3 text-sm
-                        font-semibold
-                        text-slate-200
-                      "
-                    >
-                      {stage.title}
-                    </p>
-
-                    <p
-                      className="
-                        mt-2 text-[11px]
-                        leading-5
-                        text-slate-600
-                      "
-                    >
-                      {stage.detail}
-                    </p>
-                  </div>
-
-                  {index < 5 && (
-                    <div
-                      className="
-                        absolute
-                        -right-2
-                        top-1/2
-                        z-10 hidden
-                        h-px w-4
-                        bg-cyan-900/45
-                        xl:block
+                        absolute inline-flex
+                        h-full w-full
+                        animate-ping
+                        rounded-full
+                        bg-emerald-400
+                        opacity-40
                       "
                     />
                   )}
-                </div>
-              ),
-            )}
-          </div>
-        </section>
 
+                  <span
+                    className={[
+                      "relative inline-flex",
+                      "h-2 w-2 rounded-full",
 
-        {/* =============================================
-            Operational State
-            ============================================= */}
-        <section
-          className="
-            mt-4 grid gap-4
-            lg:grid-cols-3
-          "
-        >
-          <div
-            className="
-              rounded-2xl
-              border border-slate-700/55
-              bg-[#101826]/90
-              p-5
-            "
-          >
-            <p
-              className="
-                text-[10px]
-                uppercase
-                tracking-[0.15em]
-                text-slate-600
-              "
-            >
-              Operational Coverage
-            </p>
+                      liveHasScores
+                        ? "bg-emerald-400"
+                        : "bg-amber-300",
+                    ].join(" ")}
+                  />
+                </span>
 
-            <p
-              className="
-                mt-3 text-2xl
-                font-semibold
-                text-white
-              "
-            >
-              {summary
-                ? formatNumber(
-                    summary.events_scored,
-                  )
-                : "—"}
-            </p>
+                <p
+                  className="
+                    text-[10px]
+                    font-semibold
+                    uppercase
+                    tracking-[0.16em]
+                    text-slate-500
+                  "
+                >
+                  Live Operational State
+                </p>
+              </div>
 
-            <p
-              className="
-                mt-2 text-xs
-                leading-5
-                text-slate-500
-              "
-            >
-              Events currently stored
-              with Isolation Forest v1.1
-              analysis.
-            </p>
-          </div>
-
-
-          <div
-            className="
-              rounded-2xl
-              border border-slate-700/55
-              bg-[#101826]/90
-              p-5
-            "
-          >
-            <p
-              className="
-                text-[10px]
-                uppercase
-                tracking-[0.15em]
-                text-slate-600
-              "
-            >
-              Critical Boundary
-            </p>
-
-            <p
-              className="
-                mt-3 text-2xl
-                font-semibold
-                text-red-300
-              "
-            >
-              {summary
-                ? formatNumber(
-                    summary.alert_count,
-                  )
-                : "—"}
-            </p>
-
-            <p
-              className="
-                mt-2 text-xs
-                leading-5
-                text-slate-500
-              "
-            >
-              Events currently at or
-              above the selected
-              99th-percentile alert
-              threshold.
-            </p>
-          </div>
-
-
-          <div
-            className="
-              rounded-2xl
-              border
-              border-emerald-900/40
-              bg-emerald-950/10
-              p-5
-            "
-          >
-            <p
-              className="
-                text-[10px]
-                uppercase
-                tracking-[0.15em]
-                text-emerald-500
-              "
-            >
-              Detector State
-            </p>
-
-            <div
-              className="
-                mt-3 flex
-                items-center gap-2
-              "
-            >
-              <span
+              <h2
                 className="
-                  h-2 w-2
-                  rounded-full
-                  bg-emerald-400
-                  shadow-[0_0_10px_rgba(52,211,153,0.7)]
+                  mt-2 text-lg
+                  font-semibold
+                  text-white
                 "
-              />
+              >
+                {liveHasScores
+                  ? "Operational telemetry active"
+                  : "Detector ready — awaiting live telemetry"}
+              </h2>
 
               <p
                 className="
-                  text-lg
-                  font-semibold
-                  text-emerald-300
+                  mt-2 max-w-2xl
+                  text-xs leading-5
+                  text-slate-500
                 "
               >
-                Operational
+                {liveHasScores
+                  ? (
+                    "These values come from the live operational database and change independently of the fixed benchmark."
+                  )
+                  : (
+                    "The production model is loaded correctly. Live v1.2 scoring will populate this area once the simulator worker begins generating operational events."
+                  )}
               </p>
             </div>
 
-            <p
+
+            <div
               className="
-                mt-2 text-xs
-                leading-5
-                text-slate-500
+                grid gap-3
+                sm:grid-cols-3
+                xl:min-w-[520px]
               "
             >
-              Versioned model schema,
-              preprocessing configuration
-              and training reference are
-              preserved with the artifact.
-            </p>
+              <div
+                className="
+                  rounded-xl
+                  border border-slate-800
+                  bg-[#0b111c]
+                  px-4 py-3
+                  transition-all
+                  duration-300
+                  hover:border-cyan-900/50
+                "
+              >
+                <p
+                  className="
+                    text-[8px]
+                    uppercase
+                    tracking-[0.12em]
+                    text-slate-600
+                  "
+                >
+                  Live Scores
+                </p>
+
+                <p
+                  className="
+                    mt-2 text-xl
+                    font-semibold
+                    text-white
+                  "
+                >
+                  {summary
+                    ? formatNumber(
+                        summary.events_scored,
+                      )
+                    : "—"}
+                </p>
+              </div>
+
+
+              <div
+                className="
+                  rounded-xl
+                  border border-slate-800
+                  bg-[#0b111c]
+                  px-4 py-3
+                  transition-all
+                  duration-300
+                  hover:border-red-900/50
+                "
+              >
+                <p
+                  className="
+                    text-[8px]
+                    uppercase
+                    tracking-[0.12em]
+                    text-slate-600
+                  "
+                >
+                  Critical Events
+                </p>
+
+                <p
+                  className="
+                    mt-2 text-xl
+                    font-semibold
+                    text-red-300
+                  "
+                >
+                  {summary
+                    ? formatNumber(
+                        summary.alert_count,
+                      )
+                    : "—"}
+                </p>
+              </div>
+
+
+              <div
+                className="
+                  rounded-xl
+                  border border-emerald-900/35
+                  bg-emerald-950/[0.07]
+                  px-4 py-3
+                "
+              >
+                <p
+                  className="
+                    text-[8px]
+                    uppercase
+                    tracking-[0.12em]
+                    text-emerald-600
+                  "
+                >
+                  Detector
+                </p>
+
+                <p
+                  className="
+                    mt-2 text-sm
+                    font-semibold
+                    text-emerald-300
+                  "
+                >
+                  {summary
+                    ? (
+                      `${summary.detector_name} `
+                      + `v${summary.detector_version}`
+                    )
+                    : (
+                      model
+                        ? `v${model.model_version}`
+                        : "Ready"
+                    )}
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
+
+        {/* ==================================================
+            Footer
+            ================================================== */}
 
         <footer
           className="
@@ -1991,20 +3056,21 @@ function ModelPage() {
           "
         >
           <p>
-            SENTINEL behavioral
-            anomaly detection
+            SENTINEL behavioral anomaly detection
           </p>
 
           <p>
-            Isolation Forest
-            {" "}
+            Isolation Forest{" "}
+
             {model
               ? `v${model.model_version}`
               : ""}
+
             {" · "}
             historical percentile scoring
+
             {" · "}
-            ground truth evaluation only
+            controlled ground-truth evaluation
           </p>
         </footer>
       </div>

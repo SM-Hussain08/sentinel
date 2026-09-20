@@ -1,20 +1,35 @@
+"""
+Shared Event construction for SENTINEL simulations.
+
+EventFactory creates observable security telemetry only.
+
+Simulator/evaluation ground truth must never be embedded in Event.
+Attack labels belong exclusively to the private SimulationGroundTruth
+control plane.
+"""
+
 from datetime import datetime
 from uuid import uuid4
 
-from app.models import Employee, Event
+from app.models import (
+    Employee,
+    Event,
+)
 
 
 class EventFactory:
     """
-    Creates consistent security events for SENTINEL simulations.
+    Creates consistent observable security events for SENTINEL.
 
     Event IDs use UUID-derived identifiers so independently executed
     generators cannot accidentally create duplicate public event IDs.
     """
 
-    def _generate_event_id(self) -> str:
+    def _generate_event_id(
+        self,
+    ) -> str:
         """
-        Generate a globally unique, compact SENTINEL event identifier.
+        Generate a globally unique compact SENTINEL event identifier.
 
         Example:
             EVT-A19F8407D21C
@@ -41,37 +56,61 @@ class EventFactory:
         success: bool = True,
         metadata: dict | None = None,
         session_id: str | None = None,
-        is_injected_anomaly: bool = False,
-        scenario_type: str | None = None,
     ) -> Event:
         """
-        Build one Event object without writing it to PostgreSQL.
+        Build one observable Event object without writing it to PostgreSQL.
 
-        Attack scenarios may pass the same session_id to several related
-        events so SENTINEL can correlate them later into one incident.
+        Related events may share a session_id so SENTINEL can correlate
+        their operational behavior later.
+
+        IMPORTANT:
+        This factory deliberately has no simulator ground-truth arguments.
+        Scenario identity and injected-attack labels are persisted
+        separately by the simulation orchestration layer.
         """
 
         return Event(
-            event_id=self._generate_event_id(),
+            event_id=(
+                self._generate_event_id()
+            ),
 
-            employee_id=employee.id,
+            employee_id=(
+                employee.id
+            ),
 
             timestamp=timestamp,
 
             session_id=(
                 session_id
-                or f"session-{uuid4().hex[:12]}"
+                or (
+                    f"session-"
+                    f"{uuid4().hex[:12]}"
+                )
             ),
 
-            event_type=event_type,
+            event_type=(
+                event_type
+            ),
 
-            source_ip=source_ip,
-            destination_ip=destination_ip,
+            source_ip=(
+                source_ip
+            ),
 
-            source_location=source_location,
+            destination_ip=(
+                destination_ip
+            ),
 
-            resource_type=resource_type,
-            resource_name=resource_name,
+            source_location=(
+                source_location
+            ),
+
+            resource_type=(
+                resource_type
+            ),
+
+            resource_name=(
+                resource_name
+            ),
 
             bytes_sent=max(
                 bytes_sent,
@@ -83,15 +122,12 @@ class EventFactory:
                 0,
             ),
 
-            success=success,
+            success=(
+                success
+            ),
 
             event_metadata=(
-                metadata or {}
+                metadata
+                or {}
             ),
-
-            is_injected_anomaly=(
-                is_injected_anomaly
-            ),
-
-            scenario_type=scenario_type,
         )

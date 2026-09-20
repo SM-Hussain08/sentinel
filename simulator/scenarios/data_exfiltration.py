@@ -69,8 +69,6 @@ class DataExfiltrationScenario:
                         "classification": "CONFIDENTIAL",
                     },
 
-                    is_injected_anomaly=True,
-                    scenario_type=self.scenario_type,
                 )
             )
 
@@ -113,8 +111,6 @@ class DataExfiltrationScenario:
                     "protocol": "HTTPS",
                 },
 
-                is_injected_anomaly=True,
-                scenario_type=self.scenario_type,
             )
         )
 

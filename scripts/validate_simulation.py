@@ -45,6 +45,12 @@ for path in (
 
 
 from app.database.session import SessionLocal  # noqa: E402
+
+from app.services.evaluation_ground_truth import (  # noqa: E402
+    count_injected_events,
+    scenario_counts,
+)
+
 from app.models import Employee, Event  # noqa: E402
 from simulator.validation import DatasetValidator  # noqa: E402
 
@@ -89,20 +95,10 @@ def validate_simulation() -> None:
             or 0
         )
 
-        injected_count = int(
-            db.scalar(
-                select(
-                    func.count(
-                        Event.id
-                    )
-                )
-                .where(
-                    Event.is_injected_anomaly.is_(
-                        True
-                    )
-                )
+        injected_count = (
+            count_injected_events(
+                db
             )
-            or 0
         )
 
         normal_count = (
@@ -230,27 +226,11 @@ def validate_simulation() -> None:
         # Attack scenarios
         # -------------------------------------------------
 
-        scenario_rows = db.execute(
-            select(
-                Event.scenario_type,
-                func.count(
-                    Event.id
-                ),
+        scenario_rows = (
+            scenario_counts(
+                db
             )
-            .where(
-                Event.is_injected_anomaly.is_(
-                    True
-                )
-            )
-            .group_by(
-                Event.scenario_type
-            )
-            .order_by(
-                func.count(
-                    Event.id
-                ).desc()
-            )
-        ).all()
+        )
 
         print_section(
             "Attack Ground Truth"

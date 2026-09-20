@@ -8,6 +8,10 @@ import {
   SEVERITY_STYLES,
 } from "./incidentStyles";
 
+import {
+  useNavigate,
+} from "react-router-dom";
+
 
 interface IncidentHeroProps {
   incident: IncidentDetail;
@@ -60,6 +64,9 @@ function formatIncidentType(
 function IncidentHero({
   incident,
 }: IncidentHeroProps) {
+  const navigate =
+    useNavigate();
+
   return (
     <article
       className={[
@@ -205,39 +212,145 @@ function IncidentHero({
             xl:grid-cols-4
           "
         >
-          <div
-            className="
-              rounded-xl
-              border border-slate-800
-              bg-[#0b111c]
-              p-4
-            "
-          >
-            <p
+          {incident.primary_employee_user_id ? (
+            <button
+              type="button"
+              onClick={() => {
+                navigate(
+                  `/employees/${encodeURIComponent(
+                    incident.primary_employee_user_id!,
+                  )}`,
+                );
+              }}
               className="
-                text-[9px]
-                uppercase
-                tracking-[0.13em]
-                text-slate-600
-              "
-            >
-              Affected Identity
-            </p>
+                group
+                relative
+                overflow-hidden
+                rounded-xl
+                border
+                border-slate-800
+                bg-[#0b111c]
+                p-4
+                text-left
+                transition-all
+                duration-200
 
-            <p
-              className="
-                mt-2 text-sm
-                font-semibold
-                text-slate-200
+                hover:-translate-y-0.5
+                hover:border-cyan-900/70
+                hover:bg-[#0e1824]
+                hover:shadow-[0_10px_28px_rgba(0,0,0,0.18),inset_3px_0_0_rgba(34,211,238,0.35)]
+
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-cyan-900/70
               "
             >
-              {
-                incident
-                  .primary_employee_user_id
-                ?? "Unknown"
-              }
-            </p>
-          </div>
+              <div
+                className="
+                  flex
+                  items-center
+                  justify-between
+                  gap-4
+                "
+              >
+                <div
+                  className="
+                    min-w-0
+                  "
+                >
+                  <p
+                    className="
+                      text-[9px]
+                      uppercase
+                      tracking-[0.13em]
+                      text-slate-600
+                      transition-colors
+                      duration-200
+                      group-hover:text-cyan-600
+                    "
+                  >
+                    Affected Identity
+                  </p>
+
+                  <p
+                    className="
+                      mt-2
+                      truncate
+                      text-sm
+                      font-semibold
+                      text-slate-200
+                      transition-colors
+                      duration-200
+                      group-hover:text-white
+                    "
+                  >
+                    {
+                      incident
+                        .primary_employee_user_id
+                    }
+                  </p>
+                </div>
+
+                <span
+                  className="
+                    flex
+                    h-9 w-9
+                    shrink-0
+                    items-center
+                    justify-center
+                    rounded-lg
+                    border
+                    border-slate-800
+                    bg-slate-950/50
+                    text-base
+                    text-slate-600
+                    transition-all
+                    duration-200
+
+                    group-hover:translate-x-1
+                    group-hover:border-cyan-900/70
+                    group-hover:bg-cyan-950/25
+                    group-hover:text-cyan-300
+                  "
+                  aria-hidden="true"
+                >
+                  →
+                </span>
+              </div>
+            </button>
+          ) : (
+            <div
+              className="
+                rounded-xl
+                border
+                border-slate-800
+                bg-[#0b111c]
+                p-4
+              "
+            >
+              <p
+                className="
+                  text-[9px]
+                  uppercase
+                  tracking-[0.13em]
+                  text-slate-600
+                "
+              >
+                Affected Identity
+              </p>
+
+              <p
+                className="
+                  mt-2
+                  text-sm
+                  font-semibold
+                  text-slate-500
+                "
+              >
+                Unknown
+              </p>
+            </div>
+          )}
 
           <div
             className="

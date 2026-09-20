@@ -51,11 +51,16 @@ for path in (
         )
 
 
+from ml_engine.features import (  # noqa: E402
+    V2_FEATURE_COLUMNS,
+)
+
 from ml_engine.models import (  # noqa: E402
     SentinelIsolationForest,
 )
 
 from ml_engine.preprocessing import (  # noqa: E402
+    V2_LOG_TRANSFORM_COLUMNS,
     parse_event_timestamps,
 )
 
@@ -187,6 +192,16 @@ def train_and_evaluate() -> None:
 
     detector = (
         SentinelIsolationForest(
+            model_version="v2",
+
+            feature_columns=(
+                V2_FEATURE_COLUMNS
+            ),
+
+            log_transform_columns=(
+                V2_LOG_TRANSFORM_COLUMNS
+            ),
+
             n_estimators=300,
             threshold_percentile=0.99,
             random_state=42,

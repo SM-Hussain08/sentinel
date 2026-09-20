@@ -60,8 +60,6 @@ class AccountTakeoverScenario:
 
                     session_id=session_id,
 
-                    is_injected_anomaly=True,
-                    scenario_type=self.scenario_type,
                 )
             )
 
@@ -102,8 +100,6 @@ class AccountTakeoverScenario:
                     "authentication_method": "PASSWORD",
                 },
 
-                is_injected_anomaly=True,
-                scenario_type=self.scenario_type,
             )
         )
 
@@ -142,8 +138,6 @@ class AccountTakeoverScenario:
                     "device": "UNKNOWN-DEVICE",
                 },
 
-                is_injected_anomaly=True,
-                scenario_type=self.scenario_type,
             )
         )
 
@@ -182,8 +176,6 @@ class AccountTakeoverScenario:
                     "device": "UNKNOWN-DEVICE",
                 },
 
-                is_injected_anomaly=True,
-                scenario_type=self.scenario_type,
             )
         )
 

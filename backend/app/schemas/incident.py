@@ -50,6 +50,12 @@ class IncidentDetail(BaseModel):
     severity: str
     status: str
 
+    detector_name: str
+    detector_version: str
+
+    correlation_engine: str
+    correlation_version: str
+
     primary_employee_user_id: str | None
 
     first_seen: datetime

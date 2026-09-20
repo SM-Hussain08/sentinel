@@ -2,20 +2,20 @@
   "selected_model": {
     "name": "Isolation Forest",
     "detector_name": "isolation-forest",
-    "version": "1.1",
+    "version": "1.2",
     "feature_count": 17,
-    "training_rows": 1938,
-    "evaluation_rows": 4030,
-    "precision": 0.6854838709677419,
-    "recall": 0.9550561797752809,
-    "f1_score": 0.7981220657276995,
-    "false_positive_rate": 0.009895965490992134,
-    "false_positives": 39,
+    "training_rows": 1952,
+    "evaluation_rows": 3951,
+    "precision": 0.6614173228346457,
+    "recall": 0.9438202247191011,
+    "f1_score": 0.7777777777777778,
+    "false_positive_rate": 0.011134127395132056,
+    "false_positives": 43,
     "threshold_percentile": 0.99
   },
   "provenance": {
     "training_period": "2026-08-24",
     "evaluation_period": "2026-08-25 through 2026-08-26"
   },
-  "generated_at": "2026-08-31T14:25:02.928746+00:00"
+  "generated_at": "2026-09-20T16:24:02.340857+00:00"
 }

@@ -84,8 +84,6 @@ class NetworkScanScenario:
                         ),
                     },
 
-                    is_injected_anomaly=True,
-                    scenario_type=self.scenario_type,
                 )
             )
 

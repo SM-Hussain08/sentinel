@@ -137,6 +137,73 @@ class IncidentCorrelationEngine:
         ]
 
     # ---------------------------------------------------------
+    # Employee-focused correlation
+    # ---------------------------------------------------------
+
+    def _load_employee_selected_scores(
+        self,
+        *,
+        employee_id: UUID,
+    ) -> list[ScoredEvent]:
+        """
+        Load selected-detector scored history for one employee only.
+
+        This is the core optimization for live incremental correlation.
+
+        Batch correlation may still examine the complete scored population,
+        while live processing reconstructs correlation state only for the
+        employee affected by the newly scored Event.
+
+        Ground truth is never queried.
+        """
+
+        rows = self.db.execute(
+            select(
+                Event,
+                Employee,
+                AnomalyScore,
+            )
+            .join(
+                Employee,
+                Event.employee_id
+                == Employee.id,
+            )
+            .join(
+                AnomalyScore,
+                AnomalyScore.event_uuid
+                == Event.id,
+            )
+            .where(
+                Event.employee_id
+                == employee_id,
+
+                AnomalyScore.detector_name
+                == SELECTED_DETECTOR.name,
+
+                AnomalyScore.detector_version
+                == SELECTED_DETECTOR.version,
+            )
+            .order_by(
+                Event.timestamp.asc(),
+                Event.id.asc(),
+            )
+        ).all()
+
+        return [
+            ScoredEvent(
+                event=event,
+                employee=employee,
+                anomaly=anomaly,
+            )
+            for (
+                event,
+                employee,
+                anomaly,
+            )
+            in rows
+        ]
+
+    # ---------------------------------------------------------
     # Seed clustering
     # ---------------------------------------------------------
 
@@ -1227,4 +1294,164 @@ class IncidentCorrelationEngine:
             candidates,
             key=lambda candidate:
             candidate.first_seen,
+        )
+
+    # ---------------------------------------------------------
+    # Incremental correlation
+    # ---------------------------------------------------------
+
+    def correlate_event(
+        self,
+        *,
+        event: Event,
+        anomaly: AnomalyScore,
+        employee: Employee | None = None,
+    ) -> list[IncidentCandidate]:
+        """
+        Re-evaluate correlation state affected by one newly scored Event.
+
+        This method does not persist Incident rows.
+
+        It returns only actionable incident candidates whose expanded
+        evidence contains the supplied Event.
+
+        Why this works
+        --------------
+        A new CRITICAL event may:
+            - create a new actionable cluster;
+            - extend an existing critical cluster.
+
+        A new lower-risk event may:
+            - become supporting evidence around an existing critical cluster.
+
+        Loading the complete selected-model history for this employee keeps
+        the live result semantically consistent with the existing batch
+        correlation rules without rebuilding every employee's history.
+        """
+
+        # --------------------------------------------------------
+        # Input integrity
+        # --------------------------------------------------------
+
+        if event.id is None:
+            raise RuntimeError(
+                "Event must be persisted before correlation."
+            )
+
+        if anomaly.id is None:
+            raise RuntimeError(
+                "AnomalyScore must be persisted before correlation."
+            )
+
+        if anomaly.event_uuid != event.id:
+            raise ValueError(
+                "AnomalyScore does not belong to the supplied Event."
+            )
+
+        if (
+            anomaly.detector_name
+            != SELECTED_DETECTOR.name
+            or anomaly.detector_version
+            != SELECTED_DETECTOR.version
+        ):
+            raise ValueError(
+                (
+                    "Incremental correlation requires the "
+                    "currently selected detector result. "
+                    f"Expected "
+                    f"{SELECTED_DETECTOR.name} "
+                    f"v{SELECTED_DETECTOR.version}; "
+                    f"received "
+                    f"{anomaly.detector_name} "
+                    f"v{anomaly.detector_version}."
+                )
+            )
+
+        if employee is None:
+            employee = self.db.get(
+                Employee,
+                event.employee_id,
+            )
+
+        if employee is None:
+            raise RuntimeError(
+                (
+                    "Employee could not be resolved "
+                    f"for event {event.event_id}."
+                )
+            )
+
+        if employee.id != event.employee_id:
+            raise ValueError(
+                "Employee does not belong to the supplied Event."
+            )
+
+        # --------------------------------------------------------
+        # Employee-scoped reconstruction
+        # --------------------------------------------------------
+
+        scored_events = (
+            self._load_employee_selected_scores(
+                employee_id=employee.id,
+            )
+        )
+
+        if not scored_events:
+            return []
+
+        seeds = self._critical_seeds(
+            scored_events
+        )
+
+        if not seeds:
+            return []
+
+        seed_clusters = (
+            self._group_seed_events(
+                seeds
+            )
+        )
+
+        actionable_clusters = [
+            cluster
+            for cluster
+            in seed_clusters
+            if self._cluster_is_actionable(
+                cluster
+            )
+        ]
+
+        # --------------------------------------------------------
+        # Build only candidates affected by this Event
+        # --------------------------------------------------------
+
+        affected_candidates: list[
+            IncidentCandidate
+        ] = []
+
+        for cluster in actionable_clusters:
+            candidate = (
+                self._candidate_from_cluster(
+                    cluster,
+                    scored_events,
+                )
+            )
+
+            candidate_event_ids = {
+                item.event.id
+                for item
+                in candidate.events
+            }
+
+            if event.id not in candidate_event_ids:
+                continue
+
+            affected_candidates.append(
+                candidate
+            )
+
+        return sorted(
+            affected_candidates,
+            key=lambda candidate:
+                candidate.first_seen,
         )

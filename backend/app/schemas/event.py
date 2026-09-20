@@ -78,18 +78,11 @@ class EventCreate(EventBase):
     """
     Data used to create a security event.
 
-    Ground-truth fields are included for the simulator but will never
-    be exposed to the ML model as features.
+    Simulator ground truth is stored separately in the private
+    SimulationGroundTruth control plane.
     """
 
     employee_id: UUID
-
-    is_injected_anomaly: bool = False
-
-    scenario_type: str | None = Field(
-        default=None,
-        max_length=80,
-    )
 
 
 class EventRead(EventBase):

@@ -2,9 +2,9 @@
 Train SENTINEL's selected production anomaly detector.
 
 Selected model:
-    Isolation Forest V1.1
+    Isolation Forest V1.2
 
-V1.1 intentionally preserves the successful V1 behavioral feature set
+V1.2 intentionally preserves the successful V1 behavioral feature set
 and preprocessing while adding explicit model schema/version metadata.
 
 Training:
@@ -100,7 +100,7 @@ EVALUATION_PATH = (
     / "ml_engine"
     / "data"
     / "processed"
-    / "sentinel_iforest_v1_1_evaluation.csv"
+    / "sentinel_iforest_v1_2_evaluation.csv"
 )
 
 

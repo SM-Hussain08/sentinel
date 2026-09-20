@@ -1,106 +1,97 @@
 """
-Score all SENTINEL events using the selected Isolation Forest model.
+Batch/offline scoring entry point for SENTINEL event backfill and controlled
+benchmarking.
 
-Pipeline
---------
-PostgreSQL events
-    -> behavioral feature engineering
-    -> selected Isolation Forest V1.1
-    -> anomaly percentile
-    -> risk classification
-    -> anomaly_scores table
+This is a thin command-line wrapper around the canonical scoring service:
 
-The simulator's hidden attack labels are NEVER provided to the model.
+    app.services.ml_scoring.score_unscored_events
+
+It scores persisted Events using the selected Isolation Forest detector,
+performs behavioral feature engineering, computes anomaly percentiles and
+risk classifications, and writes AnomalyScore rows.
+
+The shared scoring service ensures that batch/backfill and future live
+simulation workflows use the same operational ML implementation.
+
+This script is NOT the normal live processing path.
+
+Normal operational Events are processed automatically by the always-on
+event processor:
+
+    Event
+        -> feature engineering
+        -> selected Isolation Forest detector
+        -> AnomalyScore
+        -> incremental incident correlation
+        -> deterministic investigation
+
+For controlled benchmarks, the benchmark harness uses this entry point to
+score persisted Events reproducibly while keeping benchmark scoring isolated
+from the operational processing path.
+
+Simulator/benchmark ground-truth labels are never supplied to operational
+ML scoring.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 import sys
 
-import numpy as np
-from sqlalchemy import select
 
+# ------------------------------------------------------------
+# Repository import bootstrap
+# ------------------------------------------------------------
+#
+# Support direct execution:
+#
+#     python scripts/score_events_with_selected_model.py
+#
+# When Python executes a file inside scripts/, only that directory is
+# automatically placed on sys.path. Add the repository root first so the
+# shared scripts package and backend application can be imported reliably.
+# ------------------------------------------------------------
 
 PROJECT_ROOT = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__)
+    .resolve()
+    .parents[1]
 )
 
-BACKEND_ROOT = (
-    PROJECT_ROOT / "backend"
+project_root_string = str(
+    PROJECT_ROOT
 )
 
-
-for path in (
-    PROJECT_ROOT,
-    BACKEND_ROOT,
+if (
+    project_root_string
+    not in sys.path
 ):
-    path_string = str(path)
+    sys.path.insert(
+        0,
+        project_root_string,
+    )
 
-    if path_string not in sys.path:
-        sys.path.insert(
-            0,
-            path_string,
-        )
 
+import scripts._bootstrap  # noqa: E402,F401
 
 from app.database.session import SessionLocal  # noqa: E402
-
-from app.models import (  # noqa: E402
-    AnomalyScore,
-    Event,
+from app.selected_detector import SELECTED_DETECTOR  # noqa: E402
+from app.services.ml_scoring import (  # noqa: E402
+    get_selected_model,
+    score_unscored_events,
 )
-
-from ml_engine.evaluation import (  # noqa: E402
-    classify_ml_risk,
-)
-
-from ml_engine.features import (  # noqa: E402
-    EventFeatureBuilder,
-)
-
-from ml_engine.models import (  # noqa: E402
-    SentinelIsolationForest,
-)
-
-from app.selected_detector import (  # noqa: E402
-    SELECTED_DETECTOR,
-    SELECTED_MODEL_PATH,
-)
-
-MODEL_PATH = (
-    SELECTED_MODEL_PATH
-)
-
-
-def python_value(
-    value,
-):
-    """
-    Convert NumPy/Pandas scalar values into JSON-safe Python values.
-    """
-
-    if isinstance(
-        value,
-        np.generic,
-    ):
-        return value.item()
-
-    return value
 
 
 def score_events() -> None:
-    if not MODEL_PATH.exists():
-        raise RuntimeError(
-            "Selected model artifact was not found. "
-            "Run train_selected_model.py first."
-        )
+    """
+    Backfill all events not yet scored by the selected production model.
+    """
 
     db = SessionLocal()
 
     try:
         detector = (
-            SentinelIsolationForest.load(
-                MODEL_PATH
-            )
+            get_selected_model()
         )
 
         print()
@@ -118,331 +109,53 @@ def score_events() -> None:
             f"{len(detector.feature_columns)}"
         )
 
-        # -------------------------------------------------
-        # Build features
-        # -------------------------------------------------
-
-        builder = EventFeatureBuilder(
-            db=db,
-        )
-
-        dataframe = (
-            builder.build_dataframe()
-        )
-
-        if dataframe.empty:
-            raise RuntimeError(
-                "No events were available "
-                "for ML scoring."
+        summary = (
+            score_unscored_events(
+                db=db,
+                detector=detector,
             )
-
-        # -------------------------------------------------
-        # Score all rows
-        # -------------------------------------------------
-
-        raw_scores = (
-            detector.raw_anomaly_scores(
-                dataframe
-            )
-        )
-
-        anomaly_scores = (
-            detector.normalized_scores(
-                dataframe
-            )
-        )
-
-        predictions = (
-            detector.predict(
-                dataframe
-            )
-        )
-
-        # -------------------------------------------------
-        # Map public event ID -> database UUID
-        # -------------------------------------------------
-
-        event_rows = db.execute(
-            select(
-                Event.id,
-                Event.event_id,
-            )
-        ).all()
-
-        event_uuid_map = {
-            event_id: event_uuid
-            for event_uuid, event_id
-            in event_rows
-        }
-
-        # -------------------------------------------------
-        # Find rows already scored by this exact model
-        # -------------------------------------------------
-
-        existing_event_ids = set(
-            db.execute(
-                select(
-                    Event.event_id
-                )
-                .join(
-                    AnomalyScore,
-                    AnomalyScore.event_uuid
-                    == Event.id,
-                )
-                .where(
-                    AnomalyScore.detector_name
-                    == SELECTED_DETECTOR.name,
-
-                    AnomalyScore.detector_version
-                    == SELECTED_DETECTOR.version,
-                )
-            ).scalars()
-        )
-
-        inserted = 0
-        skipped = 0
-        flagged = 0
-
-        risk_counts = {
-            "NORMAL": 0,
-            "LOW": 0,
-            "MEDIUM": 0,
-            "HIGH": 0,
-            "CRITICAL": 0,
-        }
-
-        pending_scores: list[
-            AnomalyScore
-        ] = []
-
-        for position, (
-            _,
-            row,
-        ) in enumerate(
-            dataframe.iterrows()
-        ):
-            event_id = row[
-                "event_id"
-            ]
-
-            if (
-                event_id
-                in existing_event_ids
-            ):
-                skipped += 1
-                continue
-
-            event_uuid = (
-                event_uuid_map.get(
-                    event_id
-                )
-            )
-
-            if event_uuid is None:
-                raise RuntimeError(
-                    f"Database event was not found "
-                    f"for {event_id}."
-                )
-
-            raw_score = float(
-                raw_scores[
-                    position
-                ]
-            )
-
-            anomaly_score = float(
-                anomaly_scores[
-                    position
-                ]
-            )
-
-            prediction = int(
-                predictions[
-                    position
-                ]
-            )
-
-            risk_level = (
-                classify_ml_risk(
-                    anomaly_score
-                )
-            )
-
-            risk_counts[
-                risk_level
-            ] += 1
-
-            if prediction == 1:
-                flagged += 1
-
-            feature_snapshot = {
-                feature: python_value(
-                    row[
-                        feature
-                    ]
-                )
-                for feature
-                in detector.feature_columns
-            }
-
-            anomaly = AnomalyScore(
-                event_uuid=event_uuid,
-
-                detector_name=(
-                    SELECTED_DETECTOR.name
-                ),
-
-                detector_version=(
-                    SELECTED_DETECTOR.version
-                ),
-
-                detector_type=(
-                    SELECTED_DETECTOR.detector_type
-                ),
-
-                raw_score=raw_score,
-
-                anomaly_score=(
-                    anomaly_score
-                ),
-
-                risk_level=risk_level,
-
-                feature_snapshot=(
-                    feature_snapshot
-                ),
-
-                explanation={
-                    "summary": (
-                        "Isolation Forest "
-                        "behavioral anomaly "
-                        "analysis completed."
-                    ),
-
-                    "score_interpretation": (
-                        "Historical anomaly "
-                        "percentile relative to "
-                        "the training baseline; "
-                        "not a probability of attack."
-                    ),
-
-                    "alert_threshold": (
-                        detector
-                        .threshold_percentile
-                    ),
-
-                    "alert_threshold_reached": (
-                        bool(
-                            prediction
-                        )
-                    ),
-
-                    "model_name": (
-                        detector.model_name
-                    ),
-
-                    "model_version": (
-                        detector.model_version
-                    ),
-                },
-            )
-
-            pending_scores.append(
-                anomaly
-            )
-
-            inserted += 1
-
-        # -------------------------------------------------
-        # Persist in one transaction
-        # -------------------------------------------------
-
-        db.add_all(
-            pending_scores
         )
 
         db.commit()
-
-        # -------------------------------------------------
-        # Read the complete persisted model-score summary
-        # -------------------------------------------------
-
-        stored_scores = list(
-            db.scalars(
-                select(
-                    AnomalyScore
-                )
-                .where(
-                    AnomalyScore.detector_name
-                    == SELECTED_DETECTOR.name,
-
-                    AnomalyScore.detector_version
-                    == SELECTED_DETECTOR.version,
-                )
-            ).all()
-        )
-
-        stored_flagged = sum(
-            1
-            for score in stored_scores
-            if bool(
-                score.explanation.get(
-                    "alert_threshold_reached",
-                    False,
-                )
-            )
-        )
-
-        stored_risk_counts = {
-            "NORMAL": 0,
-            "LOW": 0,
-            "MEDIUM": 0,
-            "HIGH": 0,
-            "CRITICAL": 0,
-        }
-
-        for score in stored_scores:
-            if (
-                score.risk_level
-                in stored_risk_counts
-            ):
-                stored_risk_counts[
-                    score.risk_level
-                ] += 1
 
         print()
         print(
             "SENTINEL ML database scoring complete."
         )
 
-        print("=" * 68)
+        print(
+            "=" * 68
+        )
 
         print(
             f"Events available       : "
-            f"{len(dataframe):,}"
+            f"{summary.available_events:,}"
         )
 
         print(
             f"New ML scores          : "
-            f"{inserted:,}"
+            f"{summary.new_scores:,}"
         )
 
         print(
             f"Existing ML scores     : "
-            f"{skipped:,}"
+            f"{summary.existing_scores:,}"
         )
 
         print(
             f"Alert threshold hits   : "
-            f"{stored_flagged:,}"
+            f"{summary.threshold_hits:,}"
         )
 
         print()
+
         print(
             "Risk Distribution"
         )
 
-        print("-" * 68)
+        print(
+            "-" * 68
+        )
 
         for risk_level in [
             "CRITICAL",
@@ -453,10 +166,18 @@ def score_events() -> None:
         ]:
             print(
                 f"{risk_level:<16}"
-                f"{stored_risk_counts[risk_level]:>8}"
+                f"{summary.risk_counts[risk_level]:>8}"
             )
 
-        print("=" * 68)
+        print(
+            "=" * 68
+        )
+
+        print(
+            "Detector               : "
+            f"{SELECTED_DETECTOR.name} "
+            f"v{SELECTED_DETECTOR.version}"
+        )
 
     except Exception:
         db.rollback()

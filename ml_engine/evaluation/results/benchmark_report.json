@@ -1,0 +1,94 @@
+{
+  "benchmark": {
+    "name": "SENTINEL Controlled Benchmark",
+    "status": "PASS",
+    "seed": 42,
+    "reproducible": true,
+    "database_isolation": "dedicated benchmark database",
+    "generated_at": "2026-09-20T16:24:06.107182+00:00",
+    "elapsed_seconds": 9.207
+  },
+  "dataset": {
+    "employees": 100,
+    "normal_events": 5814,
+    "attack_events": 89,
+    "total_events": 5903,
+    "attack_instances": 5
+  },
+  "selected_experiment": {
+    "name": "V1",
+    "version": "1.0-experiment",
+    "feature_count": 17,
+    "precision": 0.6614173228346457,
+    "recall": 0.9438202247191011,
+    "f1_score": 0.7777777777777778,
+    "false_positive_rate": 0.011134127395132056,
+    "false_positives": 43,
+    "alerts": 127,
+    "selected": true,
+    "decision": "Selected because it achieved the strongest evaluation F1 and precision while preserving a compact feature set."
+  },
+  "production_model": {
+    "name": "Isolation Forest",
+    "detector_name": "isolation-forest",
+    "version": "1.2",
+    "feature_count": 17,
+    "training_rows": 1952,
+    "evaluation_rows": 3951,
+    "precision": 0.6614173228346457,
+    "recall": 0.9438202247191011,
+    "f1_score": 0.7777777777777778,
+    "false_positive_rate": 0.011134127395132056,
+    "false_positives": 43,
+    "threshold_percentile": 0.99
+  },
+  "operational_scoring": {
+    "scored_events": 5903,
+    "risk_distribution": {
+      "MEDIUM": 179,
+      "CRITICAL": 147,
+      "NORMAL": 5259,
+      "HIGH": 51,
+      "LOW": 267
+    }
+  },
+  "incident_correlation": {
+    "total": 11,
+    "severity_distribution": {
+      "MEDIUM": 6,
+      "CRITICAL": 2,
+      "HIGH": 3
+    }
+  },
+  "incident_evaluation": {
+    "true_positive_incidents": 5,
+    "false_positive_incidents": 3,
+    "attack_instances_detected": 5,
+    "attack_instances_total": 5,
+    "precision": 0.625,
+    "recall": 1.0,
+    "f1_score": 0.7692307692307693,
+    "timeline_events_recovered": 89,
+    "timeline_events_total": 89,
+    "timeline_recovery_rate": 1.0
+  },
+  "provenance": {
+    "ml_training_period": "2026-08-24",
+    "ml_evaluation_period": "2026-08-25 through 2026-08-26",
+    "incident_ground_truth_batch": "phase3_attack_batch_01",
+    "ground_truth_policy": "Simulator ground-truth labels are used only for offline evaluation and never for operational inference."
+  },
+  "canonical_signature": {
+    "employees": 100,
+    "events": 5903,
+    "selected_experiment": "V1",
+    "selected_detector": "isolation-forest v1.2",
+    "model_f1": 0.7777777777777778,
+    "critical_scores": 147,
+    "incidents": 11,
+    "attack_instances_recovered": 5,
+    "timeline_events_recovered": 89,
+    "incident_precision": 0.625,
+    "incident_recall": 1.0
+  }
+}

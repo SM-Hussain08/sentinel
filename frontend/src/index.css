@@ -32,6 +32,12 @@ body {
   min-height: 100vh;
 }
 
+@media (min-width: 768px) {
+  #root {
+    zoom: 0.8;
+  }
+}
+
 
 
 /* =========================================================
@@ -234,4 +240,38 @@ a {
 
   color:
     rgb(226, 232, 240);
+}
+
+
+/* ============================================================
+   SENTINEL sidebar navigation scrollbar
+   ============================================================ */
+
+.sentinel-sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sentinel-sidebar-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sentinel-sidebar-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sentinel-sidebar-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.sentinel-sidebar-scroll-active {
+  scrollbar-color:
+    rgba(71, 85, 105, 0.42)
+    transparent;
+}
+
+.sentinel-sidebar-scroll-active::-webkit-scrollbar-thumb {
+  background:
+    rgba(71, 85, 105, 0.42);
 }

@@ -36,10 +36,6 @@ from app.models import (
     IncidentEvent,
 )
 
-from app.selected_detector import (
-    SELECTED_DETECTOR,
-)
-
 
 # ============================================================
 # Safety policy
@@ -97,8 +93,8 @@ class AITimelineEvidence:
     IMPORTANT:
     This is an explicit whitelist.
 
-    Event.event_metadata, Event.is_injected_anomaly, and
-    Event.scenario_type are intentionally excluded.
+    Event.event_metadata and all simulator ground-truth data are
+    intentionally excluded.
     """
 
     sequence_number: int
@@ -568,10 +564,10 @@ class AIEvidenceBuilder:
                 == incident.id,
 
                 AnomalyScore.detector_name
-                == SELECTED_DETECTOR.name,
+                == incident.detector_name,
 
                 AnomalyScore.detector_version
-                == SELECTED_DETECTOR.version,
+                == incident.detector_version,
             )
             .order_by(
                 IncidentEvent.sequence_number

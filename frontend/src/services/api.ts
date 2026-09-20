@@ -13,6 +13,10 @@ import type {
   SecurityEvent,
   EvaluationSummary,
   MLAnomalyFeedPage,
+  EmployeeActivityPage,
+  EmployeeDetail,
+  EmployeeDirectoryPage,
+  EmployeeWorkforceSummary,
 } from "../types/api";
 
 import type {
@@ -21,6 +25,10 @@ import type {
   AIInvestigationResponse,
   AIServiceStatus,
 } from "../types/ai";
+
+import type {
+  OperationsStatus,
+} from "../types/api";
 
 export class SentinelApiError extends Error {
   status: number;
@@ -90,6 +98,131 @@ async function request<T>(
 
 export function getEmployees(): Promise<Employee[]> {
   return request<Employee[]>("/employees");
+}
+
+
+export interface EmployeeDirectoryOptions {
+  search?: string;
+
+  department?: string;
+
+  status?:
+    | "all"
+    | "active"
+    | "inactive";
+
+  limit?: number;
+  offset?: number;
+}
+
+
+export function getEmployeeDirectory(
+  options:
+    EmployeeDirectoryOptions = {},
+) {
+  const params =
+    new URLSearchParams();
+
+  if (
+    options.search
+    && options.search.trim()
+  ) {
+    params.set(
+      "search",
+      options.search.trim(),
+    );
+  }
+
+  if (
+    options.department
+    && options.department.trim()
+  ) {
+    params.set(
+      "department",
+      options.department.trim(),
+    );
+  }
+
+  params.set(
+    "status",
+    options.status
+    ?? "all",
+  );
+
+  params.set(
+    "limit",
+    String(
+      options.limit
+      ?? 30,
+    ),
+  );
+
+  params.set(
+    "offset",
+    String(
+      options.offset
+      ?? 0,
+    ),
+  );
+
+  return request<
+    EmployeeDirectoryPage
+  >(
+    `/employees/directory?${params.toString()}`,
+  );
+}
+
+
+export function getEmployeeWorkforceSummary() {
+  return request<
+    EmployeeWorkforceSummary
+  >(
+    "/employees/summary",
+  );
+}
+
+export function getEmployeeDetail(
+  userId: string,
+) {
+  return request<
+    EmployeeDetail
+  >(
+    `/employees/${encodeURIComponent(
+      userId,
+    )}`,
+  );
+}
+
+
+export function getEmployeeActivity(
+  userId: string,
+  limit = 30,
+  offset = 0,
+) {
+  const params =
+    new URLSearchParams();
+
+  params.set(
+    "limit",
+    String(
+      limit,
+    ),
+  );
+
+  params.set(
+    "offset",
+    String(
+      offset,
+    ),
+  );
+
+  return request<
+    EmployeeActivityPage
+  >(
+    `/employees/${encodeURIComponent(
+      userId,
+    )}/activity?${params.toString()}`,
+  );
 }
 
 
@@ -343,5 +476,16 @@ export function sendAIIncidentChatMessage(
         chatRequest,
       ),
     },
+  );
+}
+
+
+// ============================================================
+// Operational runtime intelligence
+// ============================================================
+
+export function getOperationsStatus() {
+  return request<OperationsStatus>(
+    "/operations/status",
   );
 }

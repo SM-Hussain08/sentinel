@@ -59,8 +59,6 @@ class InsiderThreatScenario:
                     ),
                 },
 
-                is_injected_anomaly=True,
-                scenario_type=self.scenario_type,
             )
         )
 
@@ -105,8 +103,6 @@ class InsiderThreatScenario:
                         "classification": "RESTRICTED",
                     },
 
-                    is_injected_anomaly=True,
-                    scenario_type=self.scenario_type,
                 )
             )
 
@@ -145,8 +141,6 @@ class InsiderThreatScenario:
                     "classification": "RESTRICTED",
                 },
 
-                is_injected_anomaly=True,
-                scenario_type=self.scenario_type,
             )
         )
 

@@ -5,6 +5,7 @@ from app.api import anomaly_feed
 from app.api import evaluation
 from app.api import incidents
 from app.api import ml
+from app.api import operations
 
 from app.api.anomalies import (
     router as anomalies_router,
@@ -50,6 +51,10 @@ api_router.include_router(
 
 api_router.include_router(
     anomaly_feed.router
+)
+
+api_router.include_router(
+    operations.router
 )
 
 api_router.include_router(

@@ -915,17 +915,22 @@ function AnomalyDetailPage() {
 
 
             <div
+              className="
+                mt-5
+              "
+            >
+              {/* Row 1: Event metadata */}
+              <div
                 className="
-                    mt-5
-                    flex
-                    flex-wrap
-                    items-center
-                    gap-2.5
+                  flex
+                  flex-wrap
+                  items-center
+                  gap-2.5
                 "
-                >
+              >
                 {/* Event ID */}
                 <span
-                    className="
+                  className="
                     inline-flex
                     items-center
                     rounded-lg
@@ -939,18 +944,17 @@ function AnomalyDetailPage() {
                     tracking-[0.04em]
                     text-cyan-300
                     shadow-[0_0_18px_rgba(34,211,238,0.04)]
-                    "
+                  "
                 >
-                    {
+                  {
                     analysis
-                        .event_id
-                    }
+                      .event_id
+                  }
                 </span>
-
 
                 {/* Event type */}
                 <span
-                    className="
+                  className="
                     inline-flex
                     items-center
                     rounded-lg
@@ -963,49 +967,17 @@ function AnomalyDetailPage() {
                     uppercase
                     tracking-[0.1em]
                     text-slate-300
-                    "
+                  "
                 >
-                    {formatAnomalyEventType(
+                  {formatAnomalyEventType(
                     analysis
-                        .event_type,
-                    )}
+                      .event_type,
+                  )}
                 </span>
-
-
-                {/* User */}
-                <span
-                    className="
-                    inline-flex
-                    items-center
-                    gap-2
-                    rounded-lg
-                    border
-                    border-indigo-900/45
-                    bg-indigo-950/15
-                    px-3 py-2
-                    text-[10px]
-                    font-medium
-                    text-indigo-300
-                    "
-                >
-                    <span
-                    className="
-                        h-1.5 w-1.5
-                        rounded-full
-                        bg-indigo-400
-                    "
-                    />
-
-                    {
-                    analysis
-                        .employee_user_id
-                    }
-                </span>
-
 
                 {/* Event timestamp */}
                 <span
-                    className="
+                  className="
                     inline-flex
                     items-center
                     gap-2
@@ -1017,21 +989,145 @@ function AnomalyDetailPage() {
                     text-[10px]
                     font-medium
                     text-slate-400
-                    "
+                  "
                 >
-                    <span
+                  <span
                     className="
-                        text-slate-600
+                      text-slate-600
                     "
-                    >
+                  >
                     ◷
+                  </span>
+
+                  {formatAnomalyTimestamp(
+                    analysis
+                      .timestamp,
+                  )}
+                </span>
+              </div>
+
+              {/* Row 2: User */}
+              <div
+                className="
+                  mt-3
+                "
+              >
+                {analysis.employee_user_id ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigate(
+                        `/employees/${encodeURIComponent(
+                          analysis.employee_user_id,
+                        )}`,
+                      );
+                    }}
+                    className="
+                      group
+                      inline-flex
+                      items-center
+                      gap-3
+                      rounded-xl
+                      border
+                      border-violet-900/60
+                      bg-violet-950/20
+                      px-4 py-3
+                      text-sm
+                      font-semibold
+                      text-violet-300
+                      shadow-[0_8px_24px_rgba(0,0,0,0.10)]
+                      transition-all
+                      duration-200
+
+                      hover:-translate-y-0.5
+                      hover:border-cyan-800/70
+                      hover:bg-cyan-950/20
+                      hover:text-cyan-200
+                      hover:shadow-[0_10px_28px_rgba(0,0,0,0.18),inset_3px_0_0_rgba(34,211,238,0.35)]
+
+                      focus-visible:outline-none
+                      focus-visible:ring-2
+                      focus-visible:ring-cyan-900/70
+                    "
+                  >
+                    <span
+                      className="
+                        h-2 w-2
+                        rounded-full
+                        bg-current
+                        opacity-80
+                      "
+                    />
+
+                    <span
+                      className="
+                        text-[9px]
+                        font-medium
+                        uppercase
+                        tracking-[0.14em]
+                        text-violet-500
+                      "
+                    >
+                      User
                     </span>
 
-                    {formatAnomalyTimestamp(
-                    analysis
-                        .timestamp,
-                    )}
-                </span>
+                    <span
+                      className="
+                        h-4
+                        w-px
+                        bg-violet-900/60
+                      "
+                    />
+
+                    <span>
+                      {
+                        analysis
+                          .employee_user_id
+                      }
+                    </span>
+
+                    <span
+                      className="
+                        ml-0.5
+                        text-base
+                        text-violet-500
+                        transition-all
+                        duration-200
+                        group-hover:translate-x-1
+                        group-hover:text-cyan-300
+                      "
+                      aria-hidden="true"
+                    >
+                      →
+                    </span>
+                  </button>
+                ) : (
+                  <span
+                    className="
+                      inline-flex
+                      items-center
+                      gap-2
+                      rounded-xl
+                      border
+                      border-slate-800
+                      bg-slate-950/30
+                      px-4 py-3
+                      text-sm
+                      text-slate-600
+                    "
+                  >
+                    <span
+                      className="
+                        h-2 w-2
+                        rounded-full
+                        bg-slate-700
+                      "
+                    />
+
+                    Unknown Identity
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

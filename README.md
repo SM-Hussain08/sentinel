@@ -1,3 +1,228 @@
+# ⚠️ Project Development Update
+
+> **SENTINEL has progressed significantly beyond the version currently documented in this README.**
+
+The README below primarily documents the project through **Phases 1–6** and was written when **Phases 7 and 8 were still planned**.
+
+Since then, SENTINEL has undergone several major development phases:
+
+* ✅ **Phase 7 — Local AI Investigation**
+* ✅ **Phase 8 — Frontend Architecture & Investigation UX**
+* ✅ **Phase 9 — Enterprise Simulation & Employee Management**
+* 🚧 **Phase 10 — Production Engineering, CI/CD, MLOps & Portfolio Release**
+
+The existing README has intentionally **not yet been fully rewritten**, because the project is still completing its final engineering and release phase.
+
+---
+
+## What Has Changed Since This README Was Written?
+
+### Phase 7 — Local AI Investigation ✅
+
+SENTINEL now includes an **optional local AI investigation layer powered by Ollama**.
+
+The local language model does **not** perform anomaly detection or determine whether activity is malicious.
+
+Instead, the architecture remains:
+
+```text
+Synthetic Events
+        ↓
+Feature Engineering
+        ↓
+Isolation Forest
+        ↓
+Historical Anomaly / Risk Scoring
+        ↓
+Rule-Based Incident Correlation
+        ↓
+Deterministic Investigation
+        ↓
+Optional Local AI Explanation & Analyst Chat
+```
+
+Phase 7 introduced capabilities including:
+
+* grounded Local AI investigation
+* evidence-whitelisted prompts
+* structured and schema-validated AI responses
+* incident-scoped AI Analyst Chat
+* hallucination-mitigation safeguards
+* deterministic input validation
+* graceful handling when Ollama is unavailable
+* CPU-only local inference
+
+Core SENTINEL detection and investigation functionality continues to operate independently of the LLM.
+
+---
+
+### Phase 8 — Frontend Architecture & Investigation UX ✅
+
+Phase 8 transformed the frontend into a **URL-routed security investigation workspace**.
+
+It introduced:
+
+* routed React architecture
+* dedicated incident investigation pages
+* dedicated anomaly analysis pages
+* Incident ↔ Anomaly investigation navigation
+* improved incident and anomaly operational queues
+* silent operational refresh for active investigation workspaces
+* incident-scoped Local AI session persistence
+* improved loading, failure, retry, and not-found states
+* reusable frontend component architecture
+* stronger investigation-focused UX
+
+SENTINEL therefore evolved from a dashboard containing several views into a more complete analyst-oriented investigation interface.
+
+---
+
+### Phase 9 — Enterprise Simulation & Employee Management ✅
+
+Phase 9 expanded SENTINEL from a reproducible security analytics prototype into a more complete **simulated enterprise security platform**.
+
+Major additions include:
+
+* expanded enterprise employee simulation
+* employee directory and employee-detail workspaces
+* employee activity intelligence
+* live security event simulation
+* persistent runtime event processing
+* independent event scoring and incident processing
+* simulation controls
+* production model promotion
+* benchmark execution
+* dedicated benchmark isolation
+* runtime and operations monitoring
+* architecture and simulation visibility in the frontend
+* stronger separation between operational inference and simulator ground truth
+
+A key architectural principle is now:
+
+> **The simulator generates the world. SENTINEL independently observes, scores, correlates, and investigates it.**
+
+The benchmark environment remains separate from the operational system.
+
+Simulator ground truth is used only for controlled evaluation and **never as an input to operational inference**.
+
+---
+
+## Detailed Phase Documentation
+
+Until the final README is produced, detailed implementation notes for the completed development phases are available under:
+
+```text
+docs/
+```
+
+These notes document the architecture, implementation decisions, validation, and completed work for:
+
+```text
+Phase 7 — Local AI Investigation
+
+Phase 8 — Frontend Architecture & Investigation UX
+
+Phase 9 — Enterprise Simulation & Employee Management
+```
+
+Readers interested in the newest SENTINEL capabilities should refer to these documents alongside the README below.
+
+---
+
+## Current Development Phase — Phase 10 
+
+SENTINEL is now in its final major engineering phase:
+
+# Phase 10 — Production Engineering, CI/CD, MLOps & Portfolio Release
+
+Phase 10 focuses on transforming the completed platform into a **reproducible, tested, hardened, and portfolio-ready release**.
+
+The Phase 10 roadmap includes:
+
+```text
+10.1  Production / release readiness audit
+10.2  Clean-clone reproducibility
+10.3  Production frontend + Nginx
+10.4  Docker / network / runtime hardening
+10.5  Backend pytest suite
+10.6  Frontend Vitest / React Testing Library suite
+10.7  Integration / E2E smoke tests
+10.8  GitHub Actions CI
+10.9  Practical MLOps / model governance
+10.10 Security / repository automation
+10.11 Versioning / release engineering
+10.12 Full clean-system regression
+10.13 Phase 10 documentation, commit & push
+```
+
+Phase 10 also includes production-oriented work around:
+
+* reproducible Docker deployment
+* Nginx frontend serving and API proxying
+* container and network hardening
+* automated backend and frontend testing
+* integration regression testing
+* CI automation
+* model artifact governance
+* production model integrity
+* repository security checks
+* versioning and release preparation
+* clean-system reproducibility
+
+Several of these Phase 10 milestones are already underway or completed as development progresses.
+
+---
+
+## Final README & v1.0.0
+
+Once **Phase 10 engineering is complete**, this interim README will be replaced by a comprehensive final project README reflecting the complete SENTINEL architecture and implementation.
+
+The final documentation will cover the completed system end-to-end, including:
+
+```text
+Synthetic Enterprise
+        ↓
+Live & Benchmark Event Generation
+        ↓
+PostgreSQL Event Storage
+        ↓
+Feature Engineering
+        ↓
+Isolation Forest Detection
+        ↓
+Historical Percentile Risk Scoring
+        ↓
+Incident Correlation
+        ↓
+Deterministic Investigation
+        ↓
+Optional Local AI Intelligence
+        ↓
+FastAPI Platform
+        ↓
+React SOC Investigation Interface
+        ↓
+Production Docker / Nginx Runtime
+```
+
+The final documentation update will be followed by the project's planned:
+
+**`v1.0.0` release**
+
+---
+
+> ### Note
+>
+> The README below should therefore be treated as the **earlier Phase 1–6 project documentation**.
+>
+> It remains useful for understanding SENTINEL's original architecture, machine-learning pipeline, incident-correlation system, evaluation design, and dashboard foundations, but some sections describing Phases 7 and 8 as future work are now outdated.
+>
+> For the latest development state, refer to the Phase 7–9 documentation in `docs/` and the project status above.
+
+---
+
+
+
 # SENTINEL
 
 ### AI-Powered Anomaly Detection & Incident Intelligence Platform

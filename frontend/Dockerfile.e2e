@@ -1,0 +1,19 @@
+# ============================================================
+# SENTINEL Browser E2E Tests
+# Reproducible Playwright + Chromium execution
+# ============================================================
+
+FROM mcr.microsoft.com/playwright:v1.63.0-noble
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+
+RUN npm ci
+
+COPY . .
+
+ENV NODE_ENV=test
+ENV CI=true
+
+CMD ["npm", "run", "e2e"]

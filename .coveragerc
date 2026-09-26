@@ -1,0 +1,37 @@
+# ============================================================
+# SENTINEL Backend Coverage Configuration
+# ============================================================
+#
+# Coverage is intentionally measured across the real backend and ML engine.
+# We do not omit difficult runtime, worker, AI, or evaluation modules merely
+# to make the percentage look better.
+#
+# Phase 10.5I establishes a minimum honest regression floor of 90%.
+# This threshold protects the tested backend baseline while preserving
+# reasonable headroom for future runtime and E2E changes."
+# ============================================================
+
+
+[run]
+
+source =
+    backend/app
+    ml_engine
+
+relative_files = True
+
+
+[report]
+
+show_missing = True
+
+skip_covered = False
+
+precision = 0
+
+fail_under = 90
+
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError

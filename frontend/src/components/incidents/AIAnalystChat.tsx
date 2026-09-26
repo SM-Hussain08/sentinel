@@ -1188,6 +1188,9 @@ function AIAnalystChat({
 
   return (
     <section
+      aria-busy={
+        isSending
+      }
       className="
         overflow-hidden
         rounded-2xl
@@ -1812,6 +1815,7 @@ function AIAnalystChat({
           {isSending
             && (
               <div
+                role="status"
                 className="
                   flex
                   justify-start
@@ -1941,6 +1945,7 @@ function AIAnalystChat({
                 "
               >
                 <div
+                  role="alert"
                   className="
                     max-w-[88%]
                     rounded-xl

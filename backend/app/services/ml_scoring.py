@@ -33,9 +33,11 @@ from app.models import (
     Employee,
     Event,
 )
+from app.model_governance import (
+    load_governed_selected_model,
+)
 from app.selected_detector import (
     SELECTED_DETECTOR,
-    SELECTED_MODEL_PATH,
 )
 from ml_engine.evaluation import (
     classify_ml_risk,
@@ -100,37 +102,9 @@ def get_selected_model(
     deserializing the joblib artifact for every incoming event.
     """
 
-    if not SELECTED_MODEL_PATH.exists():
-        raise RuntimeError(
-            "Selected model artifact was not found. "
-            "Run SENTINEL's benchmark/model-training "
-            "workflow first."
-        )
-
-    detector = (
-        SentinelIsolationForest.load(
-            SELECTED_MODEL_PATH
-        )
+    return (
+        load_governed_selected_model()
     )
-
-    if (
-        detector.model_name
-        != SELECTED_DETECTOR.name
-        or detector.model_version
-        != SELECTED_DETECTOR.version
-    ):
-        raise RuntimeError(
-            "Loaded model identity does not match "
-            "SENTINEL's selected detector configuration. "
-            f"Expected "
-            f"{SELECTED_DETECTOR.name} "
-            f"v{SELECTED_DETECTOR.version}; "
-            f"loaded "
-            f"{detector.model_name} "
-            f"v{detector.model_version}."
-        )
-
-    return detector
 
 
 def _existing_score(

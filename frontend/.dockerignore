@@ -9,3 +9,9 @@ dist
 
 .DS_Store
 Thumbs.db
+
+coverage
+
+# Playwright generated artifacts
+playwright-report
+test-results

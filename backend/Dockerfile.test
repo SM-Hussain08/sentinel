@@ -1,0 +1,79 @@
+FROM python:3.14-slim
+
+
+# ============================================================
+# SENTINEL Backend Test Image
+# ============================================================
+#
+# This image exists only for automated backend testing.
+#
+# It is deliberately separate from the operational backend image:
+# - includes pytest / pytest-cov
+# - connects only to sentinel_test
+# - never starts Uvicorn
+# - never connects to the operational PostgreSQL database
+# ============================================================
+
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+ENV PYTHONPATH=/app:/app/backend
+
+
+WORKDIR /app
+
+
+# ------------------------------------------------------------
+# Test dependencies
+# ------------------------------------------------------------
+
+COPY backend/requirements.txt \
+     /app/backend/requirements.txt
+
+COPY backend/requirements-test.txt \
+     /app/backend/requirements-test.txt
+
+
+RUN pip install \
+    --no-cache-dir \
+    --upgrade pip \
+    && pip install \
+    --no-cache-dir \
+    -r /app/backend/requirements-test.txt
+
+
+# ------------------------------------------------------------
+# Application + ML source
+# ------------------------------------------------------------
+
+COPY backend \
+     /app/backend
+
+COPY ml_engine \
+     /app/ml_engine
+
+
+# ------------------------------------------------------------
+# Root pytest / coverage configuration
+# ------------------------------------------------------------
+
+COPY pytest.ini \
+     /app/pytest.ini
+
+COPY .coveragerc \
+     /app/.coveragerc
+
+
+WORKDIR /app
+
+
+# ------------------------------------------------------------
+# Default test command
+# ------------------------------------------------------------
+#
+# docker-compose.test.yml overrides environment/database details.
+# Coverage must satisfy the repository's enforced 90% floor.
+# ------------------------------------------------------------
+
+CMD [ "python", "-m", "pytest", "--cov", "--cov-config=.coveragerc", "--cov-report=term-missing", "-q" ]

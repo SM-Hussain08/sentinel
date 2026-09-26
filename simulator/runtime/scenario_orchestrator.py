@@ -208,7 +208,7 @@ class LiveScenarioOrchestrator:
         # Attack randomness remains independent from normal employee
         # behavior so changing employee simulation does not silently
         # alter attack scheduling for a fixed seed.
-        self.random = random.Random(
+        self.random = random.Random(  # nosec B311
             seed
         )
 

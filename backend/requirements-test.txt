@@ -1,0 +1,13 @@
+# ============================================================
+# SENTINEL Backend Test Dependencies
+# ============================================================
+#
+# Production dependencies remain in requirements.txt.
+# This file adds tooling required only for automated tests,
+# coverage reporting, and CI.
+# ============================================================
+
+-r requirements.txt
+
+pytest>=9.0.3,<10
+pytest-cov>=6,<8

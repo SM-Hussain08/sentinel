@@ -182,7 +182,9 @@ def select_employee(
             )
         )
 
-    randomizer = random.Random(
+    # Deterministic simulation selection; cryptographic
+    # randomness is neither required nor desired here.
+    randomizer = random.Random(  # nosec B311
         seed
     )
 

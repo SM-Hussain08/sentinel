@@ -347,7 +347,7 @@ def _compact_chat_evidence(
 
     investigation = dict(
         evidence.get(
-            "investigation",
+            "deterministic_investigation",
             {},
         )
     )

@@ -723,7 +723,7 @@ function AppShell({
 
 
   const activePage:
-  AppPage =
+  AppPage | null =
     location.pathname
       .startsWith(
         "/incidents",
@@ -754,7 +754,9 @@ function AppShell({
                     "/simulation",
                   )
                 ? "simulation"
-                : "overview";
+                : location.pathname === "/"
+                  ? "overview"
+                  : null;
 
 
   // ==========================================================
@@ -828,9 +830,9 @@ function AppShell({
                 return;
               }
 
-              setProcessorStatus(
-                null,
-              );
+              // Preserve the last known valid processor state when a
+              // background refresh fails. A transient telemetry failure
+              // should not erase already-established operational context.
             }
           },
           SYSTEM_REFRESH_MS,
@@ -948,6 +950,11 @@ function AppShell({
         <button
           key={item.id}
           type="button"
+          aria-current={
+            isActive
+              ? "page"
+              : undefined
+          }
           onClick={() =>
             navigate(
               item.id,
@@ -1045,6 +1052,11 @@ function AppShell({
       <button
         key={item.id}
         type="button"
+        aria-current={
+          isActive
+            ? "page"
+            : undefined
+        }
         title={
           sidebarCollapsed
             ? item.label
@@ -1508,6 +1520,10 @@ function AppShell({
         <button
           type="button"
           aria-label="Toggle navigation"
+          aria-expanded={
+            mobileOpen
+          }
+          aria-controls="sentinel-mobile-navigation"
           onClick={() =>
             setMobileOpen(
               (current) =>
@@ -1544,6 +1560,7 @@ function AppShell({
       ====================================================== */}
       {mobileOpen && (
         <div
+          id="sentinel-mobile-navigation"
           className="
             fixed
             inset-x-0

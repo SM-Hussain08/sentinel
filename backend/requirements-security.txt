@@ -1,0 +1,11 @@
+# ============================================================
+# SENTINEL Security Tooling
+# ============================================================
+#
+# Security-only dependencies.
+# These are not installed in production containers.
+# They are used locally and in CI for security automation.
+# ============================================================
+
+pip-audit==2.10.1
+bandit==1.9.4

@@ -147,6 +147,10 @@ function EmployeeFilters({
                 option.value
               }
               type="button"
+              aria-pressed={
+                risk
+                === option.value
+              }
               onClick={() => {
                 onRiskChange(
                   option.value,
@@ -216,6 +220,7 @@ function EmployeeFilters({
 
           <input
             type="search"
+            aria-label="Search employees"
             value={
               searchQuery
             }
@@ -249,6 +254,7 @@ function EmployeeFilters({
         </label>
 
         <select
+          aria-label="Department"
           value={
             department
           }
@@ -291,6 +297,7 @@ function EmployeeFilters({
         </select>
 
         <select
+          aria-label="Employment status"
           value={
             status
           }
@@ -330,6 +337,7 @@ function EmployeeFilters({
         </select>
 
         <select
+          aria-label="Sort employees"
           value={
             sort
           }

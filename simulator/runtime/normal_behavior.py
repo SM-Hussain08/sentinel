@@ -100,7 +100,9 @@ class LiveNormalBehaviorEngine:
         *,
         seed: int,
     ) -> None:
-        self.random = random.Random(
+        # Seeded pseudo-randomness is required for reproducible
+        # live normal-behavior simulation.
+        self.random = random.Random(  # nosec B311
             seed
         )
 

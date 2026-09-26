@@ -675,99 +675,99 @@ function EmployeeDetailPage() {
     isNotFound
     || !userId
   ) {
-    return (
-      <main
-        className="
-          mx-auto
-          w-full
-          max-w-[1600px]
-          px-5 py-7
-          sm:px-7
-          lg:px-8
-        "
-      >
-        <button
-          type="button"
-          onClick={() => {
-            navigate(
-              "/employees",
-            );
-          }}
+      return (
+        <main
           className="
-            inline-flex
-            items-center
-            gap-2
-            rounded-lg
-            border
-            border-slate-800
-            bg-slate-950/40
-            px-3 py-2
-            text-xs
-            text-slate-400
-            transition-all
-            duration-200
-            hover:border-cyan-900/70
-            hover:bg-cyan-950/20
-            hover:text-cyan-300
+            flex min-h-screen
+            items-center justify-center
+            bg-[#0b111b]/55
+            px-4
           "
         >
-          ← Employees
-        </button>
-
-        <section
-          className="
-            mt-8
-            rounded-2xl
-            border
-            border-slate-800
-            bg-[#101826]/85
-            px-6 py-16
-            text-center
-          "
-        >
-          <div
+          <section
             className="
-              mx-auto
-              flex h-12 w-12
-              items-center
-              justify-center
-              rounded-xl
-              border
-              border-slate-800
-              bg-[#0b111c]
-              text-slate-600
+              w-full max-w-xl
+              rounded-2xl
+              border border-slate-700/55
+              bg-[#101826]/90
+              p-8 text-center
+              shadow-[0_16px_48px_rgba(0,0,0,0.16)]
             "
           >
-            ◌
-          </div>
+            <div
+              className="
+                mx-auto flex
+                h-12 w-12
+                items-center justify-center
+                rounded-xl
+                border border-slate-800
+                bg-[#0b111c]
+                text-xl
+                text-slate-600
+              "
+            >
+              !
+            </div>
 
-          <h1
-            className="
-              mt-5
-              text-xl
-              font-semibold
-              text-white
-            "
-          >
-            Employee not found
-          </h1>
+            <p
+              className="
+                mt-5
+                text-[10px]
+                font-semibold uppercase
+                tracking-[0.17em]
+                text-cyan-500
+              "
+            >
+              Employee Intelligence
+            </p>
 
-          <p
-            className="
-              mx-auto
-              mt-2
-              max-w-md
-              text-sm
-              leading-6
-              text-slate-600
-            "
-          >
-            SENTINEL could not locate the
-            requested employee identity.
-          </p>
-        </section>
-      </main>
-    );
+            <h1
+              className="
+                mt-3 text-2xl
+                font-semibold
+                text-white
+              "
+            >
+              Employee not found
+            </h1>
+
+            <p
+              className="
+                mt-3 text-sm
+                leading-6
+                text-slate-500
+              "
+            >
+              The requested employee identity could
+              not be located in SENTINEL.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                navigate(
+                  "/employees",
+                );
+              }}
+              className="
+                mt-6
+                rounded-xl
+                border border-cyan-900/60
+                bg-cyan-950/20
+                px-4 py-2.5
+                text-xs font-medium
+                text-cyan-300
+                transition-all
+                hover:-translate-y-0.5
+                hover:border-cyan-700/70
+                hover:bg-cyan-950/30
+              "
+            >
+              ← Return to Employees
+            </button>
+          </section>
+        </main>
+      );
   }
 
 
@@ -813,6 +813,7 @@ function EmployeeDetailPage() {
         />
 
         <section
+          role="alert"
           className="
             mt-8
             rounded-2xl
@@ -905,6 +906,7 @@ function EmployeeDetailPage() {
 
       {error && (
         <div
+          role="alert"
           className="
             mt-5
             rounded-xl

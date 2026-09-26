@@ -1004,6 +1004,7 @@ function OverviewPage() {
 
         {error && (
           <div
+            role="alert"
             className="
               mt-6
               rounded-xl

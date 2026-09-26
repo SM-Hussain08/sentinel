@@ -1,0 +1,118 @@
+name: sentinel-test
+
+
+# ============================================================
+# SENTINEL Isolated Test Infrastructure
+# ============================================================
+#
+# This Compose file is intentionally separate from the
+# operational SENTINEL deployment.
+#
+# It provides a disposable PostgreSQL 17 instance used only
+# by pytest and CI.
+#
+# IMPORTANT:
+# - database name: sentinel_test
+# - database user: sentinel_test
+# - host port: 65432
+# - no production volume
+# - no operational SENTINEL services
+# ============================================================
+
+services:
+
+  test-postgres:
+    image: postgres:17-alpine
+
+    restart: "no"
+
+    environment:
+      POSTGRES_USER: sentinel_test
+      POSTGRES_PASSWORD: sentinel_test
+      POSTGRES_DB: sentinel_test
+
+    # Bind to loopback only.
+    #
+    # This port is deliberately different from the operational
+    # PostgreSQL development port.
+    ports:
+      - "127.0.0.1:${SENTINEL_TEST_POSTGRES_PORT:-65432}:5432"
+
+    # Test data is deliberately ephemeral.
+    #
+    # Removing this container removes the test database.
+    tmpfs:
+      - /var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U sentinel_test -d sentinel_test"
+        ]
+
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
+
+    # Enough capacity for tests without competing heavily with
+    # the operational development stack.
+    mem_limit: 512m
+    cpus: 0.75
+    pids_limit: 128
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+
+  # ============================================================
+  # Service for Test Runner
+  # ============================================================
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.test
+
+    restart: "no"
+
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+
+    environment:
+      APP_ENV: test
+      DEBUG: "false"
+
+      OLLAMA_ENABLED: "false"
+
+      DATABASE_URL: >-
+        postgresql+psycopg://sentinel_test:sentinel_test@test-postgres:5432/sentinel_test
+
+      SENTINEL_TEST_DATABASE_URL: >-
+        postgresql+psycopg://sentinel_test:sentinel_test@test-postgres:5432/sentinel_test
+
+    command:
+      - sh
+      - -c
+      - |
+        alembic -c backend/alembic.ini upgrade head &&
+        python -m pytest \
+          --cov \
+          --cov-config=.coveragerc \
+          --cov-report=term-missing \
+          -q
+
+    mem_limit: 2g
+    cpus: 2.0
+    pids_limit: 256
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

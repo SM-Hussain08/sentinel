@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.api import api_router
 from app.config import settings
 from app.database.session import engine
+from app.version import SENTINEL_VERSION
 
 
 app = FastAPI(
@@ -13,7 +14,7 @@ app = FastAPI(
         "AI-powered anomaly detection and incident intelligence "
         "for a simulated corporate environment."
     ),
-    version="0.1.0",
+    version=SENTINEL_VERSION,
 )
 
 
@@ -54,7 +55,7 @@ def root():
 
     return {
         "service": "SENTINEL API",
-        "version": "0.1.0",
+        "version": SENTINEL_VERSION,
         "message": "SENTINEL backend is running.",
     }
 

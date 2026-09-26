@@ -151,6 +151,10 @@ from scripts.compare_ml_models import (  # noqa: E402
     compare_models,
 )
 
+from ml_engine.models import (  # noqa: E402
+    SentinelIsolationForest,
+)
+
 from scripts.train_selected_model import (  # noqa: E402
     train_selected_model,
 )
@@ -282,6 +286,26 @@ ARTIFACT_DIRECTORY = (
 )
 
 
+CANDIDATE_DIRECTORY = (
+    PROJECT_ROOT
+    / "ml_engine"
+    / "models"
+    / "candidates"
+)
+
+
+BENCHMARK_CANDIDATE_MODEL_PATH = (
+    CANDIDATE_DIRECTORY
+    / "sentinel_iforest_v1_2_candidate.joblib"
+)
+
+
+BENCHMARK_CANDIDATE_MANIFEST_PATH = (
+    CANDIDATE_DIRECTORY
+    / "sentinel_iforest_v1_2_candidate_manifest.json"
+)
+
+
 MODEL_COMPARISON_PATH = (
     RESULTS_DIRECTORY
     / "model_comparison.json"
@@ -306,6 +330,45 @@ BENCHMARK_REPORT_PATH = (
 # ============================================================
 # Helpers
 # ============================================================
+
+def train_benchmark_selected_candidate(
+) -> None:
+    """
+    Train the objectively selected detector into an isolated benchmark
+    candidate location.
+
+    This must never overwrite SENTINEL's promoted production artifact.
+    """
+
+    train_selected_model(
+        model_path=(
+            BENCHMARK_CANDIDATE_MODEL_PATH
+        ),
+        manifest_path=(
+            BENCHMARK_CANDIDATE_MANIFEST_PATH
+        ),
+        promotion_status="candidate",
+    )
+
+
+def score_benchmark_events(
+) -> None:
+    """
+    Score benchmark Events with the isolated benchmark candidate.
+
+    Operational scoring continues to use the promoted production model.
+    """
+
+    detector = (
+        SentinelIsolationForest.load(
+            BENCHMARK_CANDIDATE_MODEL_PATH
+        )
+    )
+
+    score_events(
+        detector=detector
+    )
+
 
 def utc_now_iso(
 ) -> str:
@@ -624,11 +687,9 @@ def clear_generated_outputs(
         ARTIFACT_DIRECTORY
         / "isolation_forest_v2.joblib",
 
-        ARTIFACT_DIRECTORY
-        / "sentinel_iforest_v1_2.joblib",
+        BENCHMARK_CANDIDATE_MODEL_PATH,
 
-        ARTIFACT_DIRECTORY
-        / "sentinel_iforest_v1_2_manifest.json",
+        BENCHMARK_CANDIDATE_MANIFEST_PATH,
 
         MODEL_COMPARISON_PATH,
 
@@ -1434,6 +1495,8 @@ def verify_final_artifacts(
         SELECTED_MODEL_EVALUATION_PATH,
         INCIDENT_EVALUATION_PATH,
         EVALUATION_REGISTRY_PATH,
+        BENCHMARK_CANDIDATE_MODEL_PATH,
+        BENCHMARK_CANDIDATE_MANIFEST_PATH,
     ]
 
     missing = [
@@ -1780,13 +1843,13 @@ def run_benchmark(
         ),
         (
             9,
-            "Train selected production model",
-            train_selected_model,
+            "Train selected benchmark candidate",
+            train_benchmark_selected_candidate,
         ),
         (
             10,
             "Score benchmark events",
-            score_events,
+            score_benchmark_events,
         ),
         (
             11,

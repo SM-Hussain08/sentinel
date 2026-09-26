@@ -44,6 +44,12 @@ const EMPLOYEE_API_CHUNK_SIZE =
 const SEARCH_DEBOUNCE_MS =
   300;
 
+const WORKFORCE_LOAD_ERROR =
+  "SENTINEL could not load workforce security intelligence. Confirm that the backend and PostgreSQL are running.";
+
+const DIRECTORY_LOAD_ERROR =
+  "SENTINEL could not load employee security intelligence. Confirm that the backend and PostgreSQL are running.";
+
 
 interface DirectoryLoadResult {
   items:
@@ -385,14 +391,18 @@ function EmployeesPage() {
         );
 
         setError(
-          null,
+          (current) =>
+            current
+              === WORKFORCE_LOAD_ERROR
+              ? null
+              : current,
         );
       } catch {
         if (
           !cancelled
         ) {
           setError(
-            "SENTINEL could not load workforce security intelligence. Confirm that the backend and PostgreSQL are running.",
+            WORKFORCE_LOAD_ERROR,
           );
         }
       }
@@ -449,7 +459,11 @@ function EmployeesPage() {
         );
 
         setError(
-          null,
+          (current) =>
+            current
+              === DIRECTORY_LOAD_ERROR
+              ? null
+              : current,
         );
 
         setLastRefreshedAt(
@@ -464,7 +478,7 @@ function EmployeesPage() {
           !cancelled
         ) {
           setError(
-            "SENTINEL could not load employee security intelligence. Confirm that the backend and PostgreSQL are running.",
+            DIRECTORY_LOAD_ERROR,
           );
         }
       } finally {
@@ -952,6 +966,7 @@ function EmployeesPage() {
 
       {error && (
         <div
+          role="alert"
           className="
             mt-6
             rounded-xl

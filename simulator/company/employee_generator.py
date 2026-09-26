@@ -74,7 +74,9 @@ class EmployeeGenerator:
             operational_localization
         )
 
-        self.random = random.Random(
+        # Seeded pseudo-randomness is required for reproducible
+        # synthetic employee generation.
+        self.random = random.Random(  # nosec B311
             seed
         )
 

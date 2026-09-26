@@ -1,0 +1,36 @@
+# ============================================================
+# SENTINEL Development Port Overlay
+# ============================================================
+#
+# The default docker-compose.yml intentionally exposes only
+# the Nginx application gateway.
+#
+# Use this overlay when direct host access to FastAPI or
+# PostgreSQL is useful during local development/debugging:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.dev.yml \
+#     up -d
+#
+# Optional benchmark profile:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.dev.yml \
+#     --profile benchmark \
+#     up -d benchmark-postgres
+# ============================================================
+
+services:
+  postgres:
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+
+  backend:
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  benchmark-postgres:
+    ports:
+      - "${BENCHMARK_POSTGRES_PORT:-5433}:5432"

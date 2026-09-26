@@ -9,13 +9,39 @@ services:
 
     restart: unless-stopped
 
+    # --------------------------------------------------------
+    # Runtime safeguards
+    # --------------------------------------------------------
+
+    # PostgreSQL normally uses well under 100 MiB in the
+    # SENTINEL workload, but receives generous headroom for
+    # queries, maintenance, and benchmark-sized operations.
+    mem_limit: 768m
+    mem_reservation: 128m
+    cpus: 1.0
+    pids_limit: 128
+
+    # PostgreSQL's image uses SIGINT for graceful shutdown.
+    # Allow enough time for clean checkpointing and WAL flush.
+    stop_grace_period: 60s
+
+    # Prevent unbounded json-file growth on long-running hosts.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-sentinel}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: ${POSTGRES_DB:-sentinel}
 
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    # PostgreSQL is internal-only in the default deployment.
+    # Use docker-compose.dev.yml when direct host access is
+    # intentionally required for development or debugging.
+    expose:
+      - "5432"
 
     volumes:
       - sentinel_postgres_data:/var/lib/postgresql/data
@@ -46,6 +72,44 @@ services:
 
     restart: unless-stopped
 
+    # --------------------------------------------------------
+    # Runtime safeguards
+    # --------------------------------------------------------
+
+    mem_limit: 1g
+    mem_reservation: 256m
+    cpus: 1.5
+    pids_limit: 64
+
+    # Allows Uvicorn and in-flight requests time to terminate
+    # cleanly before Docker escalates to SIGKILL.
+    stop_grace_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Run the application as an unprivileged account.
+    user: "10001:10001"
+
+    # Prevent privilege escalation through setuid/setgid
+    # binaries or similar mechanisms.
+    security_opt:
+      - no-new-privileges:true
+
+    # FastAPI/Alembic do not require Linux capabilities.
+    cap_drop:
+      - ALL
+
+    # Application code and model artifacts are immutable at
+    # runtime. Temporary files remain available through /tmp.
+    read_only: true
+
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+
     environment:
       APP_ENV: docker
       DEBUG: "false"
@@ -54,18 +118,23 @@ services:
       BACKEND_PORT: 8000
 
       DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-sentinel}
 
       # Ollama intentionally remains installed on the host.
-      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-true}
+      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-false}
       OLLAMA_BASE_URL: http://host.docker.internal:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
 
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+    # FastAPI is internal-only in the default deployment.
+    # Nginx is the public application gateway.
+    #
+    # Use docker-compose.dev.yml when direct host access to
+    # port 8000 is intentionally required.
+    expose:
+      - "8000"
 
     volumes:
       - ./ml_engine/evaluation:/app/ml_engine/evaluation:ro
@@ -115,12 +184,46 @@ services:
 
     restart: unless-stopped
 
+    # --------------------------------------------------------
+    # Runtime safeguards
+    # --------------------------------------------------------
+
+    mem_limit: 768m
+    mem_reservation: 256m
+    cpus: 1.5
+    pids_limit: 64
+
+    # The processor handles SIGTERM and persists runtime state
+    # before exiting, so give it time to shut down cleanly.
+    stop_grace_period: 30s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+    user: "10001:10001"
+
+    security_opt:
+      - no-new-privileges:true
+
+    cap_drop:
+      - ALL
+
+    read_only: true
+
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+
+
     environment:
       APP_ENV: processor
       DEBUG: "false"
 
       DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-sentinel}
 
       OLLAMA_ENABLED: "false"
 
@@ -147,24 +250,41 @@ services:
 
 
   # ==========================================================
-  # React / Vite frontend
+  # Production React / Nginx application gateway
   # ==========================================================
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
 
     container_name: sentinel-frontend
 
     restart: unless-stopped
 
-    environment:
-      VITE_API_BASE_URL: >-
-        http://localhost:${BACKEND_PORT:-8000}/api/v1
+    # --------------------------------------------------------
+    # Runtime safeguards
+    # --------------------------------------------------------
+
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.5
+    pids_limit: 64
+
+    # The official Nginx image uses SIGQUIT for graceful stop.
+    stop_grace_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${FRONTEND_PORT:-8080}:80"
 
     depends_on:
       backend:
@@ -174,15 +294,16 @@ services:
       test:
         [
           "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:5173').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+          "wget",
+          "-q",
+          "--spider",
+          "http://127.0.0.1/healthz"
         ]
 
       interval: 10s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 5s
 
 
   # ==========================================================
@@ -210,8 +331,8 @@ services:
       POSTGRES_PASSWORD: sentinel_benchmark_password
       POSTGRES_DB: sentinel_benchmark
 
-    ports:
-      - "5433:5432"
+    expose:
+      - "5432"
 
     volumes:
       - sentinel_benchmark_postgres_data:/var/lib/postgresql/data
@@ -292,7 +413,7 @@ services:
       DEBUG: "false"
 
       DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-sentinel}
 
       OLLAMA_ENABLED: "false"
 
@@ -345,7 +466,7 @@ services:
       DEBUG: "false"
 
       DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-sentinel}
 
       OLLAMA_ENABLED: "false"
 
@@ -409,7 +530,7 @@ services:
       DEBUG: "false"
 
       DATABASE_URL: >-
-        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel_password}@postgres:5432/${POSTGRES_DB:-sentinel}
+        postgresql+psycopg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}@postgres:5432/${POSTGRES_DB:-sentinel}
 
       OLLAMA_ENABLED: "false"
 

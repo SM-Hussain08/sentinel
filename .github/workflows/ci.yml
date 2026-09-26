@@ -1,0 +1,373 @@
+name: SENTINEL CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+
+jobs:
+
+  secret-scanning:
+    name: Secret Scanning
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout full repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks against Git history
+        run: |
+          docker run --rm \
+            -v "$PWD:/repo" \
+            zricethezav/gitleaks:v8.30.1 \
+            git \
+            --redact \
+            --verbose \
+            /repo
+
+
+
+  dependency-security:
+    name: Dependency Security
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-test.txt
+            backend/requirements-security.txt
+
+      - name: Install Python security tooling
+        run: |
+          python -m pip install \
+            --upgrade pip
+
+          python -m pip install \
+            -r backend/requirements-security.txt
+
+      - name: Audit backend production dependencies
+        working-directory: backend
+        run: |
+          pip-audit \
+            -r requirements.txt
+
+      - name: Audit backend test dependencies
+        working-directory: backend
+        run: |
+          pip-audit \
+            -r requirements-test.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Audit all frontend dependencies
+        working-directory: frontend
+        run: npm audit --audit-level=high
+
+      - name: Audit production frontend dependencies
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+
+
+  static-security:
+    name: Static Security Analysis
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-security.txt
+
+      - name: Install security tooling
+        run: |
+          python -m pip install \
+            --upgrade pip
+
+          python -m pip install \
+            -r backend/requirements-security.txt
+
+      - name: Run Bandit static analysis
+        run: |
+          bandit \
+            -r backend ml_engine simulator scripts \
+            -x backend/tests \
+            -f txt
+
+
+  container-security:
+    name: Container Security
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build production backend image
+        run: |
+          SENTINEL_VERSION="$(cat VERSION)"
+
+          docker build \
+            --pull \
+            --build-arg SENTINEL_VERSION="$SENTINEL_VERSION" \
+            -f backend/Dockerfile \
+            -t sentinel-backend:ci \
+            .
+
+      - name: Build production frontend image
+        run: |
+          SENTINEL_VERSION="$(cat VERSION)"
+
+          docker build \
+            --pull \
+            --build-arg SENTINEL_VERSION="$SENTINEL_VERSION" \
+            -t sentinel-frontend:ci \
+            frontend
+
+      - name: Scan backend image for HIGH and CRITICAL vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v sentinel-trivy-cache:/root/.cache/trivy \
+            aquasec/trivy:0.67.2 \
+            image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            sentinel-backend:ci
+
+      - name: Scan frontend image for HIGH and CRITICAL vulnerabilities
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v sentinel-trivy-cache:/root/.cache/trivy \
+            aquasec/trivy:0.67.2 \
+            image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            sentinel-frontend:ci
+
+
+
+  release-version:
+    name: Release Version
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Verify SENTINEL release version
+        run: |
+          python scripts/verify_release_version.py
+
+
+
+
+  model-governance:
+    name: Model Governance
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install \
+            --upgrade pip
+
+          python -m pip install \
+            -r backend/requirements.txt
+
+      - name: Verify production model governance
+        env:
+          PYTHONPATH: backend:.
+        run: |
+          python scripts/verify_model_governance.py
+
+      - name: Verify benchmark provenance
+        env:
+          PYTHONPATH: backend:.
+        run: |
+          python scripts/verify_benchmark_provenance.py
+
+
+  backend-tests:
+    name: Backend Tests
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run isolated backend test suite
+        run: |
+          docker compose \
+            -f docker-compose.test.yml \
+            up \
+            --build \
+            --abort-on-container-exit \
+            --exit-code-from test-runner
+
+      - name: Show backend test logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.test.yml \
+            logs \
+            --no-color \
+            test-runner \
+            test-postgres
+
+      - name: Clean backend test environment
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.test.yml \
+            down \
+            --remove-orphans
+
+
+  frontend-tests:
+    name: Frontend Tests
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run TypeScript build
+        run: npm run build
+
+      - name: Run frontend lint
+        run: npm run lint
+
+      - name: Run frontend coverage suite
+        run: npm run test:coverage
+
+
+  e2e-tests:
+    name: Integration and E2E Tests
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make E2E runner executable
+        run: chmod +x scripts/run_e2e.sh
+
+      - name: Run full SENTINEL E2E regression
+        run: ./scripts/run_e2e.sh
+
+      - name: Show E2E service logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.e2e.yml \
+            ps || true
+
+          docker compose \
+            -f docker-compose.e2e.yml \
+            logs \
+            --no-color \
+            --tail=250 || true
+
+      - name: Clean E2E environment
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.e2e.yml \
+            down \
+            --remove-orphans || true

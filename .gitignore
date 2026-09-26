@@ -38,13 +38,24 @@ dist/
 # -------------------------
 # Machine Learning
 # -------------------------
+
+# Ignore ad-hoc / experimental serialized models by default.
 *.pkl
 *.joblib
+
+# Allow the promoted production detector.
+!ml_engine/models/artifacts/sentinel_iforest_v1_2.joblib
 
 # Generated datasets
 ml_engine/data/generated/
 ml_engine/data/processed/
-ml_engine/models/artifacts/
+ml_engine/models/candidates/
+
+# Ignore generated model artifacts by default, but keep the
+# promoted production detector and its release manifest.
+ml_engine/models/artifacts/*
+!ml_engine/models/artifacts/sentinel_iforest_v1_2.joblib
+!ml_engine/models/artifacts/sentinel_iforest_v1_2_manifest.json
 
 # -------------------------
 # Node / React

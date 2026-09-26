@@ -17,7 +17,9 @@ class NormalActivityGenerator:
         self,
         seed: int = 100,
     ) -> None:
-        self.random = random.Random(
+        # Seeded pseudo-randomness is required for reproducible
+        # synthetic normal-activity generation.
+        self.random = random.Random(  # nosec B311
             seed,
         )
 

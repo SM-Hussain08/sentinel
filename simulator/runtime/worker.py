@@ -89,7 +89,9 @@ class LiveSimulationWorker:
             else load_live_simulation_config()
         )
 
-        self.random = random.Random(
+        # Independent deterministic stream preserves reproducible
+        # live-simulation behavior.
+        self.random = random.Random(  # nosec B311
             self.config.seed
         )
 

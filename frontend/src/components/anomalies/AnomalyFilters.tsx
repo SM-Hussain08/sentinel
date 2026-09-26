@@ -86,6 +86,12 @@ function AnomalyFilters({
                   risk
                 }
                 type="button"
+                aria-label={
+                  `${risk} risk filter`
+                }
+                aria-pressed={
+                  active
+                }
                 onClick={() => {
                   onRiskChange(
                     risk,
@@ -172,6 +178,7 @@ function AnomalyFilters({
 
           <input
             type="search"
+            aria-label="Search anomalies"
             value={
               searchQuery
             }

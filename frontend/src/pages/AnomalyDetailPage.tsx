@@ -740,6 +740,7 @@ function AnomalyDetailPage() {
         "
       >
         <section
+          role="alert"
           className="
             w-full
             max-w-xl
@@ -1267,6 +1268,7 @@ function AnomalyDetailPage() {
 
         {refreshWarning && (
           <div
+            role="status"
             className="
               mt-4
               rounded-xl

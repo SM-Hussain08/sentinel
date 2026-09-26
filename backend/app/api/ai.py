@@ -314,6 +314,60 @@ def chat_with_incident_ai(
             ),
         ) from exc
 
+    # --------------------------------------------------------
+    # Local AI provider errors
+    #
+    # IMPORTANT:
+    # OllamaServiceError subclasses RuntimeError.
+    # Specific provider exceptions must therefore be handled
+    # before the generic RuntimeError branch below.
+    # --------------------------------------------------------
+
+    except OllamaDisabledError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Local AI chat is disabled."
+            ),
+        ) from exc
+
+    except OllamaModelUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(
+                exc
+            ),
+        ) from exc
+
+    except OllamaUnavailableError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Local AI provider is unavailable."
+            ),
+        ) from exc
+
+    except OllamaTimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=str(
+                exc
+            ),
+        ) from exc
+
+    except OllamaInvalidResponseError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Local AI returned an invalid "
+                "chat response."
+            ),
+        ) from exc
+
+    # --------------------------------------------------------
+    # Remaining incident/evidence runtime errors
+    # --------------------------------------------------------
+
     except RuntimeError as exc:
         raise HTTPException(
             status_code=409,

@@ -577,6 +577,9 @@ function AIInvestigator({
 
   return (
     <article
+      aria-busy={
+        isGenerating
+      }
       className="
         relative
         overflow-hidden
@@ -906,6 +909,7 @@ function AIInvestigator({
 
         {statusError && (
           <div
+            role="alert"
             className="
               mt-4
               rounded-xl
@@ -1044,6 +1048,7 @@ function AIInvestigator({
 
         {generationFailure && (
           <div
+            role="alert"
             className="
               mt-5
               rounded-xl
@@ -1201,6 +1206,7 @@ function AIInvestigator({
 
         {isGenerating && (
           <div
+            role="status"
             className="
               mt-5
               overflow-hidden

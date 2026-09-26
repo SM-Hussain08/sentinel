@@ -460,13 +460,6 @@ function ModelPage() {
   );
 
 
-  const liveHasScores =
-    Boolean(
-      summary
-      && summary.events_scored > 0
-    );
-
-
   if (isLoading) {
     return (
       <main
@@ -589,8 +582,8 @@ function ModelPage() {
               Inspect SENTINEL&apos;s selected
               anomaly detector, controlled
               benchmark evidence, model selection,
-              incident recovery and live
-              operational state.
+              incident recovery and current
+              scoring data.
             </p>
           </div>
 
@@ -2798,7 +2791,7 @@ function ModelPage() {
 
 
         {/* ==================================================
-            Live Operational State
+            Current Data + Benchmark Snapshot
             ================================================== */}
 
         <section
@@ -2818,68 +2811,33 @@ function ModelPage() {
               -right-20 -top-24
               h-64 w-64
               rounded-full
-              bg-emerald-400/[0.025]
+              bg-cyan-400/[0.025]
               blur-[100px]
             "
           />
 
           <div
             className="
-              relative flex
-              flex-col gap-5
-              xl:flex-row
-              xl:items-center
-              xl:justify-between
+              relative
+              grid gap-6
+              xl:grid-cols-2
             "
           >
+            {/* --------------------------------------------------
+                Current SENTINEL data
+                -------------------------------------------------- */}
+
             <div>
-              <div
+              <p
                 className="
-                  flex items-center gap-2
+                  text-[10px]
+                  font-semibold uppercase
+                  tracking-[0.16em]
+                  text-cyan-500
                 "
               >
-                <span
-                  className="
-                    relative flex h-2 w-2
-                  "
-                >
-                  {liveHasScores && (
-                    <span
-                      className="
-                        absolute inline-flex
-                        h-full w-full
-                        animate-ping
-                        rounded-full
-                        bg-emerald-400
-                        opacity-40
-                      "
-                    />
-                  )}
-
-                  <span
-                    className={[
-                      "relative inline-flex",
-                      "h-2 w-2 rounded-full",
-
-                      liveHasScores
-                        ? "bg-emerald-400"
-                        : "bg-amber-300",
-                    ].join(" ")}
-                  />
-                </span>
-
-                <p
-                  className="
-                    text-[10px]
-                    font-semibold
-                    uppercase
-                    tracking-[0.16em]
-                    text-slate-500
-                  "
-                >
-                  Live Operational State
-                </p>
-              </div>
+                Current SENTINEL Data
+              </p>
 
               <h2
                 className="
@@ -2888,149 +2846,290 @@ function ModelPage() {
                   text-white
                 "
               >
-                {liveHasScores
-                  ? "Operational telemetry active"
-                  : "Detector ready — awaiting live telemetry"}
+                Current model-facing data
               </h2>
 
               <p
                 className="
-                  mt-2 max-w-2xl
+                  mt-2 max-w-xl
                   text-xs leading-5
                   text-slate-500
                 "
               >
-                {liveHasScores
-                  ? (
-                    "These values come from the live operational database and change independently of the fixed benchmark."
-                  )
-                  : (
-                    "The production model is loaded correctly. Live v1.2 scoring will populate this area once the simulator worker begins generating operational events."
-                  )}
+                Values currently stored by SENTINEL for
+                anomaly scoring. This section describes
+                available data and does not represent
+                processor runtime health.
               </p>
+
+              <div
+                className="
+                  mt-5 grid gap-3
+                  sm:grid-cols-3
+                "
+              >
+                <div
+                  className="
+                    rounded-xl
+                    border border-slate-800
+                    bg-[#0b111c]
+                    px-4 py-3
+                  "
+                >
+                  <p
+                    className="
+                      text-[8px]
+                      uppercase
+                      tracking-[0.12em]
+                      text-slate-600
+                    "
+                  >
+                    Scored Events
+                  </p>
+
+                  <p
+                    className="
+                      mt-2 text-xl
+                      font-semibold
+                      text-white
+                    "
+                  >
+                    {summary
+                      ? formatNumber(
+                          summary.events_scored,
+                        )
+                      : "—"}
+                  </p>
+                </div>
+
+                <div
+                  className="
+                    rounded-xl
+                    border border-slate-800
+                    bg-[#0b111c]
+                    px-4 py-3
+                  "
+                >
+                  <p
+                    className="
+                      text-[8px]
+                      uppercase
+                      tracking-[0.12em]
+                      text-slate-600
+                    "
+                  >
+                    Critical Events
+                  </p>
+
+                  <p
+                    className="
+                      mt-2 text-xl
+                      font-semibold
+                      text-red-300
+                    "
+                  >
+                    {summary
+                      ? formatNumber(
+                          summary.alert_count,
+                        )
+                      : "—"}
+                  </p>
+                </div>
+
+                <div
+                  className="
+                    rounded-xl
+                    border border-emerald-950/60
+                    bg-emerald-950/10
+                    px-4 py-3
+                  "
+                >
+                  <p
+                    className="
+                      text-[8px]
+                      uppercase
+                      tracking-[0.12em]
+                      text-emerald-500
+                    "
+                  >
+                    Selected Detector
+                  </p>
+
+                  <p
+                    className="
+                      mt-2 text-sm
+                      font-semibold
+                      text-emerald-300
+                    "
+                  >
+                    {model
+                      ? `${model.model_name} v${model.model_version}`
+                      : "—"}
+                  </p>
+                </div>
+              </div>
             </div>
 
+            {/* --------------------------------------------------
+                Controlled benchmark
+                -------------------------------------------------- */}
 
             <div
               className="
-                grid gap-3
-                sm:grid-cols-3
-                xl:min-w-[520px]
+                border-t border-slate-800
+                pt-6
+                xl:border-l
+                xl:border-t-0
+                xl:pl-6
+                xl:pt-0
               "
             >
-              <div
+              <p
                 className="
-                  rounded-xl
-                  border border-slate-800
-                  bg-[#0b111c]
-                  px-4 py-3
-                  transition-all
-                  duration-300
-                  hover:border-cyan-900/50
+                  text-[10px]
+                  font-semibold uppercase
+                  tracking-[0.16em]
+                  text-violet-400
                 "
               >
-                <p
-                  className="
-                    text-[8px]
-                    uppercase
-                    tracking-[0.12em]
-                    text-slate-600
-                  "
-                >
-                  Live Scores
-                </p>
+                Benchmark Evidence
+              </p>
 
-                <p
-                  className="
-                    mt-2 text-xl
-                    font-semibold
-                    text-white
-                  "
-                >
-                  {summary
-                    ? formatNumber(
-                        summary.events_scored,
-                      )
-                    : "—"}
-                </p>
-              </div>
+              <h2
+                className="
+                  mt-2 text-lg
+                  font-semibold
+                  text-white
+                "
+              >
+                Controlled evaluation snapshot
+              </h2>
 
+              <p
+                className="
+                  mt-2 max-w-xl
+                  text-xs leading-5
+                  text-slate-500
+                "
+              >
+                Fixed evaluation evidence for the selected
+                detector, kept separate from SENTINEL&apos;s
+                current operational dataset.
+              </p>
 
               <div
                 className="
-                  rounded-xl
-                  border border-slate-800
-                  bg-[#0b111c]
-                  px-4 py-3
-                  transition-all
-                  duration-300
-                  hover:border-red-900/50
+                  mt-5 grid gap-3
+                  sm:grid-cols-3
                 "
               >
-                <p
+                <div
                   className="
-                    text-[8px]
-                    uppercase
-                    tracking-[0.12em]
-                    text-slate-600
+                    rounded-xl
+                    border border-slate-800
+                    bg-[#0b111c]
+                    px-4 py-3
                   "
                 >
-                  Critical Events
-                </p>
+                  <p
+                    className="
+                      text-[8px]
+                      uppercase
+                      tracking-[0.12em]
+                      text-slate-600
+                    "
+                  >
+                    Evaluation Rows
+                  </p>
 
-                <p
+                  <p
+                    className="
+                      mt-2 text-xl
+                      font-semibold
+                      text-white
+                    "
+                  >
+                    {evaluation
+                      ? formatNumber(
+                          evaluation
+                            .selected_model
+                            .evaluation_rows,
+                        )
+                      : "—"}
+                  </p>
+                </div>
+
+                <div
                   className="
-                    mt-2 text-xl
-                    font-semibold
-                    text-red-300
+                    rounded-xl
+                    border border-slate-800
+                    bg-[#0b111c]
+                    px-4 py-3
                   "
                 >
-                  {summary
-                    ? formatNumber(
-                        summary.alert_count,
-                      )
-                    : "—"}
-                </p>
-              </div>
+                  <p
+                    className="
+                      text-[8px]
+                      uppercase
+                      tracking-[0.12em]
+                      text-slate-600
+                    "
+                  >
+                    Detector F1
+                  </p>
 
+                  <p
+                    className="
+                      mt-2 text-xl
+                      font-semibold
+                      text-cyan-300
+                    "
+                  >
+                    {evaluation
+                      ? formatPercent(
+                          evaluation
+                            .selected_model
+                            .f1_score,
+                        )
+                      : "—"}
+                  </p>
+                </div>
 
-              <div
-                className="
-                  rounded-xl
-                  border border-emerald-900/35
-                  bg-emerald-950/[0.07]
-                  px-4 py-3
-                "
-              >
-                <p
+                <div
                   className="
-                    text-[8px]
-                    uppercase
-                    tracking-[0.12em]
-                    text-emerald-600
+                    rounded-xl
+                    border border-slate-800
+                    bg-[#0b111c]
+                    px-4 py-3
                   "
                 >
-                  Detector
-                </p>
+                  <p
+                    className="
+                      text-[8px]
+                      uppercase
+                      tracking-[0.12em]
+                      text-slate-600
+                    "
+                  >
+                    Timeline Recovery
+                  </p>
 
-                <p
-                  className="
-                    mt-2 text-sm
-                    font-semibold
-                    text-emerald-300
-                  "
-                >
-                  {summary
-                    ? (
-                      `${summary.detector_name} `
-                      + `v${summary.detector_version}`
-                    )
-                    : (
-                      model
-                        ? `v${model.model_version}`
-                        : "Ready"
-                    )}
-                </p>
+                  <p
+                    className="
+                      mt-2 text-xl
+                      font-semibold
+                      text-violet-300
+                    "
+                  >
+                    {evaluation
+                      ? formatPercent(
+                          evaluation
+                            .incident_evaluation
+                            .timeline_recovery_rate,
+                        )
+                      : "—"}
+                  </p>
+                </div>
               </div>
             </div>
           </div>

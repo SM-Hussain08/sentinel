@@ -74,25 +74,35 @@ if (
 
 import scripts._bootstrap  # noqa: E402,F401
 
+from ml_engine.models import SentinelIsolationForest  # noqa: E402
+
 from app.database.session import SessionLocal  # noqa: E402
-from app.selected_detector import SELECTED_DETECTOR  # noqa: E402
+
 from app.services.ml_scoring import (  # noqa: E402
     get_selected_model,
     score_unscored_events,
 )
 
 
-def score_events() -> None:
+def score_events(
+    *,
+    detector: SentinelIsolationForest | None = None,
+) -> None:
     """
-    Backfill all events not yet scored by the selected production model.
+    Score all Events that do not yet have a score for the supplied detector.
+
+    When no detector is supplied, load SENTINEL's canonical promoted
+    production detector. Controlled benchmarks may explicitly provide
+    an isolated candidate detector without changing operational scoring.
     """
 
     db = SessionLocal()
 
     try:
-        detector = (
-            get_selected_model()
-        )
+        if detector is None:
+            detector = (
+                get_selected_model()
+            )
 
         print()
         print(
@@ -175,8 +185,8 @@ def score_events() -> None:
 
         print(
             "Detector               : "
-            f"{SELECTED_DETECTOR.name} "
-            f"v{SELECTED_DETECTOR.version}"
+            f"{detector.model_name} "
+            f"v{detector.model_version}"
         )
 
     except Exception:

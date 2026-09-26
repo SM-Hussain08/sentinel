@@ -707,6 +707,7 @@ function IncidentDetailPage() {
         "
       >
         <section
+          role="alert"
           className="
             w-full max-w-xl
             rounded-2xl
@@ -987,6 +988,7 @@ function IncidentDetailPage() {
 
         {refreshWarning && (
           <div
+            role="status"
             className="
               mt-4
               rounded-xl

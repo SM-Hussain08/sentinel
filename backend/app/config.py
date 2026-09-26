@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     # --------------------------------------------------------
 
     backend_host: str = (
-        "0.0.0.0"
+        "127.0.0.1"
     )
 
     backend_port: int = 8000
@@ -90,7 +90,7 @@ class Settings(BaseSettings):
 
     # Allows the entire AI layer to be disabled without affecting
     # SENTINEL's core security pipeline.
-    ollama_enabled: bool = True
+    ollama_enabled: bool = False
 
     # Ollama's default local HTTP API.
     ollama_base_url: str = (

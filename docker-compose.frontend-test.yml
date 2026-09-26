@@ -1,0 +1,19 @@
+name: sentinel-frontend-test
+
+services:
+  frontend-test:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.test
+
+    environment:
+      NODE_ENV: test
+
+    command:
+      [
+        "npm",
+        "run",
+        "test:coverage"
+      ]
+
+    restart: "no"

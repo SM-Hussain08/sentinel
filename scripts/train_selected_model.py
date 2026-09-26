@@ -14,6 +14,7 @@ Evaluation:
     2026-08-25 through 2026-08-26
 """
 
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -122,7 +123,12 @@ TEST_END = pd.Timestamp(
 )
 
 
-def train_selected_model() -> None:
+def train_selected_model(
+    *,
+    model_path: Path = MODEL_PATH,
+    manifest_path: Path = MANIFEST_PATH,
+    promotion_status: str = "production",
+) -> None:
     dataframe = pd.read_csv(
         DATASET_PATH
     )
@@ -275,8 +281,12 @@ def train_selected_model() -> None:
     )
 
     detector.save(
-        MODEL_PATH
+        model_path
     )
+
+    artifact_sha256 = hashlib.sha256(
+        model_path.read_bytes()
+    ).hexdigest()
 
     manifest = {
         "model_name": (
@@ -289,6 +299,18 @@ def train_selected_model() -> None:
 
         "algorithm": (
             "IsolationForest"
+        ),
+
+        "promotion_status": (
+            promotion_status
+        ),
+
+        "experiment": (
+            "V1"
+        ),
+
+        "feature_schema_version": (
+            "1.0"
         ),
 
         "feature_count": len(
@@ -332,6 +354,18 @@ def train_selected_model() -> None:
             detector.random_state
         ),
 
+        "benchmark_seed": (
+            detector.random_state
+        ),
+
+        "artifact_filename": (
+            model_path.name
+        ),
+
+        "artifact_sha256": (
+            artifact_sha256
+        ),
+
         "metrics": {
             "true_positives": int(tp),
             "false_positives": int(fp),
@@ -362,12 +396,12 @@ def train_selected_model() -> None:
         ),
     }
 
-    MANIFEST_PATH.parent.mkdir(
+    manifest_path.parent.mkdir(
         parents=True,
         exist_ok=True,
     )
 
-    MANIFEST_PATH.write_text(
+    manifest_path.write_text(
         json.dumps(
             manifest,
             indent=2,
@@ -537,12 +571,12 @@ def train_selected_model() -> None:
 
     print(
         f"Model artifact         : "
-        f"{MODEL_PATH}"
+        f"{model_path}"
     )
 
     print(
         f"Model manifest         : "
-        f"{MANIFEST_PATH}"
+        f"{manifest_path}"
     )
 
     print(

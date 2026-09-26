@@ -295,7 +295,9 @@ def validate_ai_chat_message(
             reason="greeting",
 
             response_message=(
-                random.choice(
+                # Non-cryptographic choice only varies
+                # harmless greeting wording.
+                random.choice(  # nosec B311
                     GREETING_RESPONSES
                 )
             ),
@@ -320,7 +322,9 @@ def validate_ai_chat_message(
             reason="capability_question",
 
             response_message=(
-                random.choice(
+                # Non-cryptographic choice only varies
+                # harmless capability-response wording.
+                random.choice(  # nosec B311
                     CAPABILITY_RESPONSES
                 )
             ),

@@ -7,7 +7,7 @@ SENTINEL application releases use Semantic Versioning.
 
 ---
 
-## [1.0.0] - 2026-09-26
+## [1.0.0] - 2026-09-29
 
 ### Overview
 

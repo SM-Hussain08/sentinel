@@ -122,6 +122,9 @@ The reproducible benchmark evaluates detection and incident recovery against pri
 - [API & Operational Endpoints](#api--operational-endpoints)
 - [Design Decisions & Current Limitations](#design-decisions--current-limitations)
 - [Troubleshooting](#troubleshooting-section)
+- [Release & Versioning](#release--versioning)
+- [Author](#author)
+- [License](#license)
 
 ---
 
@@ -14783,3 +14786,57 @@ for ordinary cleanup and restart workflows.
 > **Diagnose first. Restart second. Rebuild only when necessary. Delete persistent data only when you explicitly intend to reset it.**
 
 ---
+
+## Release & Versioning
+
+SENTINEL follows **Semantic Versioning** for platform releases.
+
+The current stable release is **v1.0.0**, representing the first production-ready release of the platform.
+
+- **Release:** `v1.0.0`
+- **Canonical version source:** [`VERSION`](VERSION)
+- **Release history:** [`CHANGELOG.md`](CHANGELOG.md)
+- **GitHub Release:** [SENTINEL v1.0.0](https://github.com/SM-Hussain08/sentinel/releases/tag/v1.0.0)
+
+Release-version consistency is validated automatically in CI across the repository version, backend application metadata, frontend package metadata, and lockfile metadata.
+
+SENTINEL's platform version is intentionally independent from internal component lineage:
+
+| Component | Version |
+| --- | --- |
+| SENTINEL Platform | `1.0.0` |
+| Isolation Forest Detector | `1.2` |
+| Event Processor | `1.0` |
+| Correlation Engine | `1.0` |
+| Investigation Engine | `1.0` |
+| Feature Schema | `1.0` |
+
+This separation allows models and internal processing components to evolve independently while preserving a clear platform release history.
+
+---
+
+## Author
+
+<p align="center">
+  <img
+    src="docs/assets/branding/sentinel-title-logo.png"
+    alt="SENTINEL"
+    width="420"
+  />
+</p>
+
+**Syed Muhammad Hussain**
+BS Computer Science candidate at **IBA Karachi**, with interests in software engineering, artificial intelligence, machine learning, data engineering, automation, and intelligent systems.
+
+SENTINEL was designed and developed as an end-to-end security intelligence platform combining machine learning, backend engineering, data processing, frontend development, MLOps, testing, and DevSecOps practices.
+
+- **GitHub:** [SM-Hussain08](https://github.com/SM-Hussain08)
+- **LinkedIn:** [linkedin.com/in/smhussain06](https://www.linkedin.com/in/smhussain06)
+
+---
+
+## License
+
+SENTINEL is released under the **MIT License**.
+
+See [`LICENSE`](LICENSE) for the full license text.

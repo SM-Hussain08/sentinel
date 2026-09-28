@@ -105,7 +105,21 @@ def seed_e2e() -> None:
         db.add(employee)
         db.flush()
 
-        now = datetime.now(timezone.utc)
+        # Keep E2E model inputs deterministic across local and CI runs.
+        #
+        # SENTINEL features include time-dependent behavioral signals such
+        # as hour_sin, hour_cos, and outside_work_hours. Using the real
+        # current time here caused the same fixture to produce different
+        # anomaly classifications depending on when the test ran.
+        now = datetime(
+            2026,
+            9,
+            25,
+            15,
+            30,
+            0,
+            tzinfo=timezone.utc,
+        )
 
         events = [
             build_event(
